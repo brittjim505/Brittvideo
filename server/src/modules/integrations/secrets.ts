@@ -8,7 +8,7 @@ import { OwnerError } from '../../lib/errors.js';
 
 /** Allowed secret names. Values are write-only through the API (V18, S16, U6). */
 export const SECRET_NAMES = ['square.access_token', 'square.location_id', 'square.webhook_signature_key',
-  'vimeo.access_token', 'heygen.api_key', 'email.api_key', 'sms.api_key'] as const;
+  'vimeo.access_token', 'heygen.api_key', 'anthropic.api_key', 'email.api_key', 'sms.api_key'] as const;
 
 export async function setSecret(q: Queryable, actor: Actor, name: string, value: string) {
   requirePerm(actor, 'integrations', 'manage integration credentials');

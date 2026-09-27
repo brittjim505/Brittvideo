@@ -26,6 +26,9 @@ import { importPrototypeExport } from './modules/migration/importer.js';
 import { auditTrail } from './modules/audit/service.js';
 import { objectPath } from './integrations/storage.js';
 import { TERMS_VERSION, termsText } from './modules/sales/terms.js';
+import * as analysis from './modules/builder/analysis.js';
+import * as images from './modules/builder/images.js';
+import * as kit from './modules/builder/kit.js';
 import { money, sha256 } from './lib/util.js';
 
 declare module 'fastify' {
@@ -284,6 +287,48 @@ export async function buildApp(pool: pg.Pool, opts: { logger?: boolean } = {}): 
   app.get('/api/projects/:id/checkpoints', async (req) => projects.listCheckpoints(pool, actor(req), params(req).id));
   app.post('/api/projects/:id/checkpoints', async (req) => { const a = actor(req); auth.requirePerm(a, 'work'); return projects.createCheckpoint(pool, params(req).id, 'manual', body(req).reason || 'Saved by owner', a.label); });
   app.post('/api/projects/:id/checkpoints/:cid/restore', async (req) => projects.restoreCheckpoint(pool, actor(req), params(req).id, params(req).cid));
+  // =============================================================================================================
+  // Builder (Phase 3): website analysis, facts, images, build, scene images, downloads, delivery, Quick Video
+  // =============================================================================================================
+  app.get('/api/projects/:id/builder', async (req) => {
+    const a = actor(req); auth.requirePerm(a, 'work'); const id = params(req).id;
+    const detail = await projects.getProject(pool, a, id);
+    const latest = (await pool.query(`SELECT id, url, status, owner_message, pages, created_at FROM website_analyses WHERE project_id=$1 ORDER BY created_at DESC LIMIT 1`, [id])).rows[0] ?? null;
+    return { ...detail, facts: await analysis.listFacts(pool, id), images: await images.projectImages(pool, id), analysis: latest,
+      options: kit.builderOptions(detail.project.industry ?? 'other'), deliveries: await kit.deliveryHistory(pool, id) };
+  });
+  app.post('/api/projects/:id/analyze', async (req) => analysis.analyzeWebsite(pool, actor(req), params(req).id, body(req).url));
+  app.post('/api/projects/:id/facts', async (req) => analysis.addFact(pool, actor(req), params(req).id, body(req).text));
+  app.patch('/api/projects/:id/facts/:fid', async (req) => analysis.updateFact(pool, actor(req), params(req).id, params(req).fid, body(req)));
+  app.post('/api/projects/:id/images/:assetId', async (req) => images.setProjectImage(pool, actor(req), params(req).id, params(req).assetId, !!body(req).selected));
+  app.post('/api/projects/:id/build', async (req) => { const b = body(req); return kit.buildKit(pool, actor(req), params(req).id, { story: b.story, tone: b.tone, websiteSecs: Number(b.websiteSecs), platform: b.platform, confirmReplaceApproved: !!b.confirmReplaceApproved }); });
+  app.put('/api/projects/:id/scenes/:sceneId/image', async (req) => kit.setSceneImage(pool, actor(req), params(req).id, params(req).sceneId, body(req).assetId ?? null));
+  app.post('/api/projects/:id/approve-many', async (req) => {
+    const a = actor(req); const items: { id: string; expectedHash: string }[] = Array.isArray(body(req).items) ? body(req).items : [];
+    if (!items.length || items.length > 60) throw new OwnerError('Choose the scenes to approve.');
+    let st: any = null;
+    for (const it of items) st = await projects.approve(pool, a, params(req).id, { type: 'scene', id: it.id, expectedHash: it.expectedHash });
+    return st;
+  });
+  app.get('/api/projects/:id/download/kit', async (req, reply) => {
+    const r = await kit.buildKitZip(pool, actor(req), params(req).id);
+    return reply.header('Content-Type', 'application/zip').header('Content-Disposition', `attachment; filename="${r.fileName}"`).header('Cache-Control', 'no-store').send(r.data);
+  });
+  app.get('/api/projects/:id/download/script/:did', async (req, reply) => {
+    const r = await kit.scriptDownload(pool, actor(req), params(req).id, params(req).did);
+    return reply.header('Content-Type', 'text/plain; charset=utf-8').header('Content-Disposition', `attachment; filename="${r.fileName}"`).header('Cache-Control', 'no-store').send(r.data);
+  });
+  app.post('/api/projects/:id/delivery', async (req) => kit.recordDelivery(pool, actor(req), params(req).id, body(req)));
+  app.post('/api/quick-videos', async (req) => kit.createQuickVideo(pool, actor(req), body(req)));
+
+  // Image Library
+  app.get('/api/images', async (req) => { const qy = req.query as any; return images.listLibrary(pool, actor(req), { view: qy.view, clientId: qy.clientId, search: qy.q, category: qy.category }); });
+  app.post('/api/images', async (req) => images.uploadImage(pool, actor(req), body(req)));
+  app.patch('/api/images/:id', async (req) => images.updateImage(pool, actor(req), params(req).id, body(req)));
+  app.post('/api/images/delete', async (req) => images.deleteImages(pool, actor(req), body(req).ids ?? [], !!body(req).confirmInUse));
+  app.post('/api/images/restore', async (req) => images.restoreImages(pool, actor(req), body(req).ids ?? []));
+  app.post('/api/images/purge', async (req) => images.purgeImages(pool, actor(req), body(req).ids ?? []));
+
   app.get('/api/audit', async (req) => {
     const a = actor(req); const qy = req.query as any;
     if (qy.entityId) auth.requirePerm(a, 'work'); else auth.requirePerm(a, 'users', 'view the full audit trail');
