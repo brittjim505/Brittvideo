@@ -64,6 +64,15 @@ function visualFor(role: 'opening' | 'moment' | 'closing' | 'hook', imageTitle: 
   return `Gentle, authentic moment using ${subject} as the reference; subtle camera movement; one continuous shot.${frame}`;
 }
 
+const WEAK_END = new Set(['a', 'an', 'the', 'of', 'and', 'or', 'to', 'for', 'with', 'from', 'in', 'on', 'at', 'by', 'since', 'our', 'your', 'their', 'is', 'are', 'has', 'have', 'that', 'who', 'every', 'each', 'offers', 'provides', 'gives', 'includes', 'features', 'makes', 'helps']);
+/** A short readable scene title: up to 5 words, cut at a comma, never ending on a dangling word like "of" or "since". */
+export function sceneTitle(text: string): string {
+  const head = text.split(/[,;:—–(]/)[0].replace(/[.!?]+$/, '').trim();
+  const w = head.split(/\s+/).slice(0, 5);
+  while (w.length > 2 && WEAK_END.has(w[w.length - 1].toLowerCase().replace(/[^a-z]/g, ''))) w.pop();
+  return w.join(' ').replace(/[.,;:]$/, '');
+}
+
 export function templateWriter(inp: WriterInput): KitDraft {
   const counts = sceneCounts(inp.websiteSecs);
   const hooks = HOOKS[inp.industry] ?? HOOKS.other;
@@ -72,6 +81,10 @@ export function templateWriter(inp: WriterInput): KitDraft {
   const build = (n: number, opts: { opening?: string; hook?: string; closing: string; vertical: boolean; startAt: number }): SceneDraft[] => {
     const scenes: SceneDraft[] = [];
     let li = opts.startAt, prev: string | null = null;
+    // Spread any picture-only moments evenly between spoken scenes instead of bunching them at the end.
+    const middle = Math.max(0, n - 2);
+    const spoken = Math.min(middle, Math.max(0, lines.length - (opts.hook ? 0 : 1)));
+    const speaks = (j: number) => middle > 0 && Math.floor((j + 1) * spoken / middle) > Math.floor(j * spoken / middle);
     for (let i = 0; i < n; i++) {
       const first = i === 0, last = i === n - 1 && n > 1;
       let narration = '', factIds: string[] = [], role: 'opening' | 'moment' | 'closing' | 'hook' = 'moment', name = '';
@@ -80,9 +93,9 @@ export function templateWriter(inp: WriterInput): KitDraft {
         const l = lines.length ? lines[li++ % lines.length] : null;
         narration = `Welcome to ${inp.businessName}.` + (l ? ' ' + l.text : ''); factIds = l ? [l.factId] : []; role = 'opening'; name = 'Welcome';
       } else if (last) { narration = `${inp.businessName}. ${opts.closing}`; role = 'closing'; name = 'Next Step'; }
-      else if (lines.length && li - opts.startAt < lines.length) {
+      else if (lines.length && speaks(i - 1)) {
         const l = lines[li++ % lines.length]; narration = l.text; factIds = [l.factId];
-        name = l.text.split(' ').slice(0, 4).join(' ').replace(/[.,;:]$/, '');
+        name = sceneTitle(l.text);
       } else { narration = ''; name = 'Visual Moment'; }
       const imageId = pickImage(narration, inp.images, prev, i); prev = imageId;
       scenes.push({ name, start_s: i * SCENE_SECONDS, end_s: (i + 1) * SCENE_SECONDS, narration, factIds,

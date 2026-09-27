@@ -3,6 +3,8 @@ import { createRoot } from 'react-dom/client';
 import { BrowserRouter } from 'react-router-dom';
 import '../shared/styles.css';
 import { App } from './App';
+import { applySize } from '../shared/textsize';
+applySize();
 
 // Report unexpected browser errors so the owner never has to open developer tools (Q25).
 const report = (message: string, where?: string) => {

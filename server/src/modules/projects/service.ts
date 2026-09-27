@@ -134,8 +134,11 @@ export async function updateScene(pool: pg.Pool, actor: Actor, projectId: string
     const next = { ...s, ...Object.fromEntries(Object.entries(patch).filter(([, v]) => v !== undefined)) };
     const h = sceneHash(next);
     if (h === s.content_hash) return kitStatus(t, projectId);
-    await t.query(`UPDATE scenes SET name=$2, visual=$3, narration=$4, image_ref=$5, content_hash=$6, content_version=content_version+1, updated_at=now() WHERE id=$1`,
-      [sceneId, next.name, next.visual, next.narration, next.image_ref === null ? null : JSON.stringify(next.image_ref), h]);
+    // Rewritten words are the owner's own — they no longer come from a website page, so the source citation is cleared (never mis-cited).
+    const reworded = (next.narration ?? '') !== (s.narration ?? '');
+    await t.query(`UPDATE scenes SET name=$2, visual=$3, narration=$4, image_ref=$5, content_hash=$6, content_version=content_version+1, updated_at=now(),
+        fact_ids = CASE WHEN $7 THEN '{}'::uuid[] ELSE fact_ids END, written_by = CASE WHEN $7 THEN 'owner' ELSE written_by END WHERE id=$1`,
+      [sceneId, next.name, next.visual, next.narration, next.image_ref === null ? null : JSON.stringify(next.image_ref), h, reworded]);
     await recordInvalidationIfApproved(t, actor, projectId, 'scene', sceneId, s.content_hash, h, `Scene ${s.position} "${s.name}" edited`);
     return kitStatus(t, projectId);
   }, pool);
@@ -216,8 +219,9 @@ export async function restoreCheckpoint(pool: pg.Pool, actor: Actor, projectId: 
         const h2 = sceneHash(s); const existing = have.find((x) => x.position === s.position);
         if (existing && existing.content_hash === h2) continue;
         if (existing) {
-          await t.query(`UPDATE scenes SET name=$2, start_s=$3, end_s=$4, image_ref=$5, visual=$6, narration=$7, content_hash=$8, content_version=content_version+1, updated_at=now() WHERE id=$1`,
-            [existing.id, s.name, s.start_s, s.end_s, s.image_ref === null ? null : JSON.stringify(s.image_ref), s.visual, s.narration, h2]);
+          await t.query(`UPDATE scenes SET name=$2, start_s=$3, end_s=$4, image_ref=$5, visual=$6, narration=$7, content_hash=$8, content_version=content_version+1, updated_at=now(),
+              fact_ids=COALESCE($9::uuid[], fact_ids), written_by=COALESCE($10, written_by) WHERE id=$1`,
+            [existing.id, s.name, s.start_s, s.end_s, s.image_ref === null ? null : JSON.stringify(s.image_ref), s.visual, s.narration, h2, s.fact_ids ?? null, s.written_by ?? null]);
           await recordInvalidationIfApproved(t, actor, projectId, 'scene', existing.id, existing.content_hash, h2, `Scene ${s.position} restored from checkpoint`);
         } else {
           await t.query(`INSERT INTO scenes (deliverable_id, position, name, start_s, end_s, image_ref, visual, narration, content_hash) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9)`,

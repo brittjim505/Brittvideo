@@ -42,14 +42,15 @@ export function ProjectDetail() {
   const approvedScenes = st.deliverables.reduce((s: number, x: any) => s + x.approvedCount, 0);
   return <>
     <div className="pagehead"><div><h1>{p.business_name}</h1><p className="muted">Project #{p.project_number} · {KIND[p.kind]} · {p.title}{p.order_number ? ` · Order ${p.order_number}` : ''}</p></div>
-      <div className="row"><Status s={p.status} />{p.client_id && <Link className="btn" to={`/clients/${p.client_id}`}>OPEN CLIENT</Link>}</div></div>
+      <div className="row"><Status s={p.status} />{p.kind === 'video_kit' && <Link className="btn next" to={`/projects/${p.id}/build`}>OPEN BUILDER</Link>}{p.client_id && <Link className="btn" to={`/clients/${p.client_id}`}>OPEN CLIENT</Link>}</div></div>
 
-    {p.status === 'ready_to_start' && <div className="notice ok" style={{ marginBottom: 14 }}><b>New Client — Ready to Start.</b> Everything from the sale is here: business, website, industry and package. Build the videos in V2.11.23 for now; the Builder moves into this app in Phase 3.</div>}
+    {p.status === 'ready_to_start' && p.kind === 'video_kit' && <div className="notice ok" style={{ marginBottom: 14 }}><b>New Client — Ready to Start.</b> Everything from the sale is here: business, website, industry and package. Press <b>OPEN BUILDER</b> to start.</div>}
+    {p.kind !== 'video_kit' && d.data.deliverables[0] && <QuickScript projectId={p.id} d={d.data.deliverables[0]} st={st.deliverables[0]} settings={p.settings} onChange={reload} />}
     {production?.status === 'needs_reapproval' && <div className="notice warn" style={{ marginBottom: 14 }}><b>Changes were made after final approval.</b> Review the highlighted scenes, approve them, then approve the Complete Video Kit again.</div>}
 
     <section className="card">
       <div className="row between"><h2 style={{ margin: 0 }}>Approvals</h2>
-        {st.completeVideoKitApproved ? <span className="badge ok" style={{ fontSize: 15 }}>✓ COMPLETE VIDEO KIT APPROVED</span> :
+        {p.kind !== 'video_kit' ? null : st.completeVideoKitApproved ? <span className="badge ok" style={{ fontSize: 15 }}>✓ COMPLETE VIDEO KIT APPROVED</span> :
           <button className={'btn ' + (st.readyForFinalApproval ? 'next' : '')} disabled={!st.readyForFinalApproval || a.busy} onClick={() => approve('kit', undefined, st.compositeHash)}>APPROVE COMPLETE VIDEO KIT</button>}</div>
       {totalScenes > 0 && <div style={{ margin: '12px 0' }}><div className="progress" aria-label="Scenes approved"><span style={{ width: `${Math.round(100 * approvedScenes / totalScenes)}%` }} /></div>
         <p className="small muted" style={{ marginTop: 4 }}>{approvedScenes} of {totalScenes} scenes approved</p></div>}
@@ -85,7 +86,7 @@ export function ProjectDetail() {
           {production?.approved_at && <><dt>Approved</dt><dd>{when(production.approved_at)}</dd></>}
           {production?.package_downloaded_at && <><dt>Package downloaded</dt><dd>{when(production.package_downloaded_at)}</dd></>}
           {production?.delivered_at && <><dt>Delivered</dt><dd>{when(production.delivered_at)} {production.delivery_method ? '· ' + production.delivery_method : ''}</dd></>}</dl>
-        <p className="help">Production through the AI video provider arrives in Phase 4; delivery and downloads in Phase 5.</p>
+        <p className="help">{p.kind === 'video_kit' ? 'Download the approved kit and record delivery in the Builder (step 8).' : 'Approve the script above, then download it.'} Automatic video production through the AI video provider comes in a later update.</p>
       </section>
       <section className="card"><h2>Saved versions (checkpoints)</h2>
         <p className="help">BrittVideo saves a version at every important step. Restoring never invents an approval — approvals follow the exact words that were approved.</p>
@@ -96,6 +97,26 @@ export function ProjectDetail() {
     </div>
     {edit && <EditScene projectId={id!} s={edit} onClose={() => { setEdit(null); reload(); }} />}
   </>;
+}
+
+/** Quick Video / Email Video: edit the narration or the whole script, approve, then download. */
+function QuickScript({ projectId, d, st, settings, onChange }: { projectId: string; d: any; st: any; settings: any; onChange: () => void }) {
+  const [narration, setNarration] = useState(settings?.narration ?? ''); const a = useAction();
+  const saveNarration = () => a.run(async () => {
+    const start = 'FINAL NARRATION — EDIT AS NEEDED\n', end = '\n\nPRODUCTION PLAN';
+    const i = d.script_text.indexOf(start), j = d.script_text.indexOf(end, i + start.length);
+    if (i < 0 || j < 0) throw new Error('The narration section was not found in the script. Edit the full script below instead.');
+    await put(`/api/projects/${projectId}/deliverables/${d.id}/script`, { text: d.script_text.slice(0, i) + start + '“' + narration.trim() + '”' + d.script_text.slice(j) }); onChange();
+  }, 'Narration saved.');
+  return <section className="card" style={{ marginBottom: 14 }}>
+    <h2>{d.label} — {d.duration_s} seconds</h2>
+    <Field label="Narration — the words spoken" help={`${narration.trim() ? narration.trim().split(/\s+/).length : 0} words. Saving changes the script; an approved script then needs approval again.`}><textarea value={narration} onChange={(e) => setNarration(e.target.value)} style={{ minHeight: 140 }} /></Field>
+    <div className="actions"><button className="btn" disabled={a.busy} onClick={saveNarration}>SAVE NARRATION</button>
+      {st?.scriptApproved ? <><span className="badge ok">✓ Script approved</span><a className="btn next" href={`/api/projects/${projectId}/download/script/${d.id}`}>DOWNLOAD SCRIPT</a></>
+        : <button className="btn next" disabled={a.busy} onClick={() => a.run(async () => { await post(`/api/projects/${projectId}/approve`, { type: 'script', id: d.id, expectedHash: d.script_hash }); onChange(); })}>APPROVE SCRIPT</button>}</div>
+    <Msg error={a.error} ok={a.ok} />
+    <details style={{ marginTop: 12 }}><summary>Show / edit the full script</summary><DeliverableScript projectId={projectId} d={d} approved={!!st?.scriptApproved} onChange={onChange} /></details>
+  </section>;
 }
 
 function EditScene({ projectId, s, onClose }: { projectId: string; s: any; onClose: () => void }) {

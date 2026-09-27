@@ -6,7 +6,7 @@ import type { FastifyInstance } from 'fastify';
 import { db, closeDb } from '../src/db/pool.js';
 import { resetDb, seedUsers, app as mkApp, client, uid } from './helpers.js';
 import { _test as fetchTest, safeFetch } from '../src/integrations/web-fetch.js';
-import { templateWriter, claudeWriter, phrases } from '../src/modules/builder/writer.js';
+import { templateWriter, claudeWriter, phrases, sceneTitle } from '../src/modules/builder/writer.js';
 import { quickNarration } from '../src/modules/builder/templates.js';
 
 // ---- A fake dental practice website (home + services page + images) ----
@@ -159,6 +159,12 @@ describe('approval → download → delivery (W16, N7, N9, N11, T15)', () => {
     const c = await jim();
     expect((await c.raw('GET', `/api/projects/${projectId}/download/kit`)).status).toBe(409);
     let b = (await c.get(`/api/projects/${projectId}/builder`)).json;
+    // Owner rewrites a cited scene: its words are now the owner's, so it must not still claim a website source.
+    const cited = b.scenes.find((s: any) => s.fact_ids?.length && s.position > 1);
+    await c.patch(`/api/projects/${projectId}/scenes/${cited.id}`, { narration: 'Our owner-written line about gentle care.' });
+    b = (await c.get(`/api/projects/${projectId}/builder`)).json;
+    const rewritten = b.scenes.find((s: any) => s.id === cited.id);
+    expect(rewritten.fact_ids).toEqual([]); expect(rewritten.written_by).toBe('owner');
     for (const d of b.status.deliverables) {
       const items = b.scenes.filter((s: any) => s.deliverable_id === d.id).map((s: any) => ({ id: s.id, expectedHash: s.content_hash }));
       await c.post(`/api/projects/${projectId}/approve-many`, { items });
@@ -176,6 +182,7 @@ describe('approval → download → delivery (W16, N7, N9, N11, T15)', () => {
       'Sunrise_Family_Dental_Social_A_30sec_1x1_Square.txt', 'Sunrise_Family_Dental_Social_B_30sec_1x1_Square.txt', 'Sunrise_Family_Dental_Email_15sec.txt', 'Sunrise_Family_Dental_Image_Sources.txt']) expect(names).toContain(n);
     expect(names.some((n) => /^images\/\d\d_.*\.jpg$/.test(n))).toBe(true);
     expect(r.rawPayload.toString('latin1')).toContain('SOURCE: http://127.0.0.1');                // grounding travels with the kit
+    expect(r.rawPayload.toString('utf8')).toMatch(/owner-written line about gentle care\.\S*\nSOURCE: written by the owner/);
     const d = await c.post(`/api/projects/${projectId}/delivery`, { method: 'Emailed download link', reference: 'Sent to office manager' });
     expect(d.status).toBe(200);
     const detail = (await c.get(`/api/projects/${projectId}/builder`)).json;
@@ -284,6 +291,16 @@ describe('script writers', () => {
     const k = templateWriter(input);
     expect(k.website.length).toBe(6);
     expect(k.social_a[0].narration).toMatch(/\?$/);                       // a hook, not a claim
+  });
+  it('picture-only moments are spread out, and scene titles never end on a dangling word', () => {
+    const k = templateWriter({ ...input, websiteSecs: 60 });                // 12 scenes, only a few facts
+    const spokenMiddle = k.website.slice(1, 11).map((s, i) => (s.narration ? i : -1)).filter((i) => i >= 0);
+    expect(spokenMiddle.length).toBeGreaterThan(0);
+    expect(Math.max(...spokenMiddle)).toBeGreaterThanOrEqual(5);           // spoken lines reach the second half, not all bunched first
+    expect(k.website[0].narration && k.website[11].narration).toBeTruthy();
+    expect(sceneTitle('A full calendar of activities, from painting')).toBe('A full calendar of activities');
+    expect(sceneTitle('Family-owned and operated since 2004.')).toBe('Family-owned and operated since 2004');
+    expect(sceneTitle('Our memory care neighborhood offers a secure space')).toBe('Our memory care neighborhood');
   });
   it('the AI writer is used when it follows the rules, and rejected when it cites nothing', async () => {
     const scene = (n: string, ids: string[]) => ({ name: 'S', visual: 'v', narration: n, factIds: ids, imageId: 'i1' });

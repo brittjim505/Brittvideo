@@ -30,12 +30,12 @@ p { margin: 0 0 10px; }
 .small { font-size: 14px; }
 
 /* Layout */
-.topbar { position: sticky; top: 0; z-index: 20; background: var(--brand); color: #fff; display: flex; align-items: center; gap: 12px; padding: 10px 16px; flex-wrap: wrap; }
+.topbar { position: relative; z-index: 20; background: var(--brand); color: #fff; display: flex; align-items: center; gap: 12px; padding: 10px 16px; flex-wrap: wrap; }
 .topbar .logo { font-weight: 800; font-size: 19px; letter-spacing: .01em; color: #fff; text-decoration: none; display: flex; align-items: center; gap: 8px; }
 .topbar .spacer { flex: 1; }
 .topbar input[type=search] { background: #1f2937; border: 1px solid #374151; color: #fff; min-width: 220px; }
 .topbar .user { font-size: 14px; color: #cbd5e1; }
-.navbar { background: var(--surface); border-bottom: 1px solid var(--line); display: flex; gap: 4px; padding: 6px 12px; overflow-x: auto; position: sticky; top: 58px; z-index: 19; }
+.navbar { background: var(--surface); border-bottom: 1px solid var(--line); display: flex; flex-wrap: wrap; gap: 4px; padding: 6px 12px; position: sticky; top: 0; z-index: 19; }
 .navbar a { padding: 10px 14px; border-radius: 10px; color: var(--ink-2); text-decoration: none; font-weight: 600; white-space: nowrap; }
 .navbar a.active { background: var(--blue-soft); color: var(--blue); }
 main { max-width: 1180px; margin: 0 auto; padding: 22px 16px 80px; }
@@ -111,7 +111,31 @@ pre.report { white-space: pre-wrap; background: var(--surface-2); border: 1px so
 @media (max-width: 700px) {
   h1 { font-size: 24px; }
   .topbar input[type=search] { min-width: 0; width: 100%; order: 10; }
-  .navbar { top: auto; position: static; }
   .kv { grid-template-columns: 1fr; }
   .grid-2 { grid-template-columns: 1fr; }
 }
+
+/* ---- Phase 3: Builder, image grid, text size ---- */
+.steps { display: flex; gap: 6px; flex-wrap: wrap; margin: 0 0 16px; }
+.step { display: flex; align-items: center; gap: 8px; padding: 8px 12px; border-radius: 999px; border: 1px solid var(--line); background: var(--surface); color: var(--ink-2); font-weight: 700; font-size: 15px; cursor: pointer; font-family: inherit; }
+.step .num { width: 26px; height: 26px; border-radius: 50%; display: inline-flex; align-items: center; justify-content: center; background: var(--surface-2); border: 1px solid var(--line); font-size: 14px; }
+.step.done .num { background: var(--green-btn); color: #fff; border-color: var(--green-btn); }
+.step.active { border-color: var(--blue); color: var(--blue); background: var(--blue-soft); box-shadow: 0 0 0 3px color-mix(in srgb, var(--blue) 18%, transparent); }
+.youarehere { font-size: 22px; font-weight: 800; margin: 0 0 4px; }
+.imggrid { display: grid; gap: 12px; grid-template-columns: repeat(auto-fill, minmax(190px, 1fr)); }
+.imgcard { border: 2px solid var(--line); border-radius: 12px; overflow: hidden; background: var(--surface); display: flex; flex-direction: column; }
+.imgcard.on { border-color: var(--green-btn); }
+.imgcard.dnu { border-color: var(--red); opacity: .75; }
+.imgcard img { width: 100%; aspect-ratio: 4 / 3; object-fit: cover; background: var(--surface-2); display: block; }
+.imgcard .pad { padding: 10px; display: flex; flex-direction: column; gap: 6px; flex: 1; }
+.scene-row { display: grid; grid-template-columns: 180px 1fr; gap: 14px; }
+.scene-row img { width: 180px; aspect-ratio: 4 / 3; object-fit: cover; border-radius: 8px; background: var(--surface-2); }
+.fact { display: flex; gap: 10px; align-items: flex-start; padding: 10px 0; border-top: 1px solid var(--line); }
+.fact:first-child { border-top: 0; }
+.fact.off { opacity: .55; }
+.source { font-size: 13px; color: var(--muted); word-break: break-all; }
+.tabbar { display: flex; gap: 6px; flex-wrap: wrap; margin-bottom: 12px; }
+.textsize { display: inline-flex; border: 1px solid #374151; border-radius: 10px; overflow: hidden; }
+.textsize button { background: transparent; color: #e5e7eb; border: 0; padding: 6px 10px; font-weight: 800; cursor: pointer; font-family: inherit; }
+.textsize button.on { background: #e5e7eb; color: #111827; }
+@media (max-width: 700px) { .scene-row { grid-template-columns: 1fr; } .scene-row img { width: 100%; } }

@@ -11,6 +11,10 @@ import { Projects, ProjectDetail } from './pages/Projects';
 import { NewSale } from './pages/NewSale';
 import { Settings } from './pages/Settings';
 import { SystemHealth } from './pages/SystemHealth';
+import { Builder } from './pages/Builder';
+import { ImageLibrary } from './pages/Images';
+import { QuickVideo } from './pages/QuickVideo';
+import { SIZES, currentSize, applySize, type SizeKey } from '../shared/textsize';
 
 export function App() {
   const [me, setMe] = useState<Me | null>(null);
@@ -79,6 +83,7 @@ function Shell({ env }: { env: string }) {
               <span className="badge">{r.type}</span> {r.label}</button>)}
           </div>}
         </div>
+        <TextSize />
         <button className="btn support small" onClick={() => openSupport()}>GET SUPPORT</button>
         <span className="user">{me?.displayName} · {me?.roleLabel}</span>
         <button className="btn small" onClick={async () => { await post('/api/auth/logout'); location.href = '/app'; }}>Sign out</button>
@@ -89,6 +94,8 @@ function Shell({ env }: { env: string }) {
         <NavLink to="/demo">Demo &amp; Sales</NavLink>
         <NavLink to="/clients">Clients</NavLink>
         <NavLink to="/projects">Projects</NavLink>
+        <NavLink to="/quick">Quick Video</NavLink>
+        <NavLink to="/images">Image Library</NavLink>
         <NavLink to="/health">System Health</NavLink>
         <NavLink to="/settings">Settings</NavLink>
       </nav>
@@ -103,6 +110,9 @@ function Shell({ env }: { env: string }) {
           <Route path="/clients/:id" element={<ClientDetail />} />
           <Route path="/projects" element={<Projects />} />
           <Route path="/projects/:id" element={<ProjectDetail />} />
+          <Route path="/projects/:id/build" element={<Builder />} />
+          <Route path="/quick" element={<QuickVideo />} />
+          <Route path="/images" element={<ImageLibrary />} />
           <Route path="/health" element={<SystemHealth />} />
           <Route path="/settings/*" element={<Settings />} />
           <Route path="*" element={<div className="card"><h1>Page not found</h1><p><a href="/app">Go to the Command Center</a></p></div>} />
@@ -111,6 +121,13 @@ function Shell({ env }: { env: string }) {
       </main>
     </>
   );
+}
+
+/** Text size: A / A+ / A++ (remembered on this device). */
+function TextSize() {
+  const [size, setSize] = useState<SizeKey>(currentSize());
+  return <span className="textsize" role="group" aria-label="Text size">{SIZES.map((s) =>
+    <button key={s.key} className={size === s.key ? 'on' : ''} aria-pressed={size === s.key} title={'Text size ' + s.label} onClick={() => { applySize(s.key); setSize(s.key); }}>{s.label}</button>)}</span>;
 }
 
 function ChangePasswordBanner() {

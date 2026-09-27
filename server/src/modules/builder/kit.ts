@@ -150,7 +150,7 @@ export async function buildKitZip(pool: pg.Pool, actor: Actor, projectId: string
   const sceneText = (d: any, fmt: string) => `${d.script_text}\nFormat for this file: ${fmt}\n\n` + scenes.filter((s) => s.deliverable_id === d.id).map((s) => {
     if (s.image_ref?.assetId) usedAssets.set(s.image_ref.assetId, { title: s.image_ref.title });
     const src = (s.fact_ids ?? []).map((id: string) => facts.get(id)).filter(Boolean).map((f: any) => f.source_url ? `${f.source_url}` : 'provided by the client/owner');
-    return `SCENE ${s.position} — ${s.name}\nTIME: ${s.start_s}–${s.end_s} sec\nIMAGE: ${s.image_ref?.title ?? 'none'}\nSCENE VISUALIZATION: ${s.visual}\nNARRATION: ${s.narration ? '“' + s.narration + '”' : '(no narration)'}\n${src.length ? 'SOURCE: ' + [...new Set(src)].join(' ; ') + '\n' : ''}`;
+    return `SCENE ${s.position} — ${s.name}\nTIME: ${s.start_s}–${s.end_s} sec\nIMAGE: ${s.image_ref?.title ?? 'none'}\nSCENE VISUALIZATION: ${s.visual}\nNARRATION: ${s.narration ? '“' + s.narration + '”' : '(no narration)'}\n${src.length ? 'SOURCE: ' + [...new Set(src)].join(' ; ') + '\n' : s.narration && s.written_by === 'owner' ? 'SOURCE: written by the owner\n' : ''}`;
   }).join('\n');
   for (const d of dels) {
     const label = d.kind === 'website' ? 'Website' : d.kind === 'social_a' ? 'Social_A' : d.kind === 'social_b' ? 'Social_B' : d.kind === 'email' ? 'Email' : 'Video';

@@ -75,7 +75,7 @@ export function CommandCenter() {
       <section className="card">
         <h2>Quick Video</h2>
         <p className="muted">Thank You · Follow-Up · Review Request · Referral Request · Promotion · Announcement · Seasonal · Email Video — 15 to 120 seconds.</p>
-        <p className="help">The Builder moves into this app in Phase 3. Until then, build Quick Videos in BrittVideo V2.11.23 as usual.</p>
+        <div className="actions"><Link className="btn next" to="/quick">BUILD A QUICK VIDEO</Link></div>
       </section>
 
       {can('revenue') && d.revenue && <section className="card">
