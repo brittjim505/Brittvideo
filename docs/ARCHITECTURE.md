@@ -76,10 +76,8 @@ brittvideo/
 │  ├─ AUDIT_V2.11.22.md      Baseline audit
 │  ├─ DATA_MODEL.md          Entities, invariants, where each rule is enforced
 │  ├─ ACCEPTANCE_STATUS.md   Checklist with evidence per item
-│  ├─ PROVIDER_ADAPTERS.md   Adapter contract + certification procedure
-│  ├─ BACKUP_AND_RESTORE.md  Procedure, tested drill
-│  ├─ SUPPORT_REPORT.md      Report schema + redaction rules
-│  ├─ MIGRATION_FROM_PROTOTYPE.md
+│  ├─ OWNER_ACCEPTANCE_TEST.md  Jim's one-step-at-a-time test
+│  ├─ OPERATIONS.md          Backup/restore, support report, V2 migration, provider adapter contract
 │  ├─ spec/                  The owner's specification package (unchanged)
 │  └─ audit-scripts/         Browser scripts used for the audit
 ├─ prototype/                V2.11.22 (reference) and V2.11.23 bridge build
