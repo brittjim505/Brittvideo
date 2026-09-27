@@ -16,6 +16,7 @@ master spec legend. "Verified" means observed in the browser test, not inferred 
 | D6 | Demo → client conversion creates a **client only** — no order, price, agreement, payment or project record. | Browser test: project count unchanged after conversion. | Delta requirement "convert directly to a real client **and project**" is only partly met. |
 | D7 | Video Library reads `state.projects`, which nothing writes. | Browser test: always 0. | Screen always empty. |
 | D8 | Support report shows stale version "V2.11.17". | Code. | Q18 (actual version in report) not met. |
+| D9 | **Approve Scene, Rewrite Scene and Change Image throw an error after a kit is built.** `updateProductionCheck` writes to a `#productionCheck` panel that `showKit` has already removed; the error stops the Step 7 counters and final-approval panel from refreshing. | Browser test: `approveScene(0)` → `TypeError: Cannot set properties of null`. | Counters appear one click behind or stale — the likely root cause of the repeated "approval counter" patches (V2.10.73–V2.10.76). |
 
 ## 2. Requirement status by area
 
@@ -59,6 +60,6 @@ scenes, approvals, scripts, Quick Video, production record), `brittvideo-v28-del
 * The prototype remains the behavioral reference. Its best ideas are carried forward deliberately:
   content-fingerprinted final approval, honest "not delivered until recorded" states, Quick Video narration
   timing targets, the guided 8-step flow, the plain-language support report.
-* D1 and D3 are fixed in a minimal **V2.11.23** bridge build so Jim can keep working while production is built;
+* D1, D3, D8 and D9 are fixed in a minimal **V2.11.23** bridge build so Jim can keep working while production is built;
   V2.11.23 also adds **EXPORT ALL DATA FOR UPGRADE** so existing work can be imported into production.
 * D2, D4–D7 are not patched in the prototype; they are solved properly in production (Phases 2–3).

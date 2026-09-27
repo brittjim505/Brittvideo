@@ -1,0 +1,19 @@
+{
+  "name": "brittvideo",
+  "private": true,
+  "version": "3.0.0-phase2",
+  "description": "BrittVideo — production application",
+  "workspaces": ["server", "web"],
+  "scripts": {
+    "build": "npm run build -w web && npm run build -w server",
+    "start": "npm run start -w server",
+    "dev": "npm run dev -w server",
+    "test": "npm test -w server",
+    "migrate": "npm run migrate -w server",
+    "create-super-user": "npm run create-super-user -w server",
+    "backup": "npm run backup -w server",
+    "restore": "npm run restore -w server",
+    "import-prototype": "npm run import-prototype -w server"
+  },
+  "engines": { "node": ">=22" }
+}

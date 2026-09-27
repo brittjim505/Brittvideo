@@ -963,6 +963,9 @@ function updateProductionCheck(){
  const approved=sceneState.filter(x=>x.approved).length;
  const warnings=sceneState.filter(x=>sceneWarning(x)).length;
  const box=$('#productionCheck');
+ // V2.11.23 BRIDGE FIX (D9): this panel is absent after the scene workspace is re-rendered; a missing panel
+ // used to throw and stop Approve / Rewrite / Change Image from refreshing the Step 7 counters.
+ if(!box) return;
  if(approved===sceneState.length && warnings===0) box.innerHTML=`<div class="readyBox"><b>✓ PRODUCTION READY</b><br>All ${approved} scenes are approved and no image/story mismatches are flagged.</div>`;
  else box.innerHTML=`<div class="reviewBox"><b>Production check:</b> ${approved}/${sceneState.length} scenes approved • ${warnings} possible image/story mismatch${warnings===1?'':'es'}.</div>`;
 }

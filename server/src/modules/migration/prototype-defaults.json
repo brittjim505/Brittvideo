@@ -1,0 +1,160 @@
+{
+ "moradaImages": [
+  {
+   "title": "Community Entrance",
+   "src": "https://moradaquintessencealbuquerque.seniorlivingnearme.com/hs-fs/hubfs/MQ_entrance%20Large.jpeg?height=800&name=MQ_entrance+Large.jpeg&width=1200",
+   "source": "Morada website — entrance"
+  },
+  {
+   "title": "Assisted Living / Social",
+   "src": "https://moradaquintessencealbuquerque.seniorlivingnearme.com/hs-fs/hubfs/Imported%20images/Assisted_Living.png%3Fauto%3Dwebp%26format%3Dpng.png?format=png.png&height=600&length=800&name=Assisted_Living.png%3Fauto%3Dwebp&width=800",
+   "source": "Morada website — Assisted Living"
+  },
+  {
+   "title": "Dining",
+   "src": "https://moradaquintessencealbuquerque.seniorlivingnearme.com/hs-fs/hubfs/Elevate-Dining-ISL-4.jpg?height=600&length=800&name=Elevate-Dining-ISL-4.jpg&width=800",
+   "source": "Morada website — Elevate Dining"
+  },
+  {
+   "title": "Vibrant Life Activities",
+   "src": "https://moradaquintessencealbuquerque.seniorlivingnearme.com/hs-fs/hubfs/Vibrant%20Life.jpg?height=600&length=800&name=Vibrant+Life.jpg&width=800",
+   "source": "Morada website — Vibrant Life"
+  },
+  {
+   "title": "Scheduled Transportation",
+   "src": "https://moradaquintessencealbuquerque.seniorlivingnearme.com/hs-fs/hubfs/transportation%20-%20connections%20-%20bus%20GettyImages-184925183.jpg?height=600&length=800&name=transportation+-+connections+-+bus+GettyImages-184925183.jpg&width=800",
+   "source": "Morada website — Transportation"
+  },
+  {
+   "title": "Housekeeping / Worry-Free Living",
+   "src": "https://moradaquintessencealbuquerque.seniorlivingnearme.com/hs-fs/hubfs/why-housekeeping-services-in-hillsborough-county-fl-assisted-living-are-important-img.jpg?height=600&length=800&name=why-housekeeping-services-in-hillsborough-county-fl-assisted-living-are-important-img.jpg&width=800",
+   "source": "Morada website — Housekeeping"
+  }
+ ],
+ "socialAScenes": [
+  {
+   "name": "A Better Kind of Morning",
+   "start": 0,
+   "end": 5,
+   "image": 0,
+   "visual": "Vertical-friendly establishing view of the community entrance with a gentle push-in.",
+   "narration": "What if assisted living could add more connection to every day?"
+  },
+  {
+   "name": "Connection Starts Here",
+   "start": 5,
+   "end": 10,
+   "image": 1,
+   "visual": "Warm close social moment framed vertically around residents and companionship.",
+   "narration": "At Morada Quintessence, support and connection shape the day."
+  },
+  {
+   "name": "Enjoy the Day",
+   "start": 10,
+   "end": 15,
+   "image": 3,
+   "visual": "Upbeat activity image cropped for 9:16, emphasizing participation and energy.",
+   "narration": "Vibrant Life activities offer more ways to participate and connect."
+  },
+  {
+   "name": "Meals Together",
+   "start": 15,
+   "end": 20,
+   "image": 2,
+   "visual": "Vertical dining composition focused on shared mealtime and conversation.",
+   "narration": "Chef-prepared meals make dining another time to connect."
+  },
+  {
+   "name": "Less to Worry About",
+   "start": 20,
+   "end": 25,
+   "image": 5,
+   "visual": "Lifestyle image framed around comfort while housekeeping support remains visible.",
+   "narration": "Fewer household chores leave more time for what matters."
+  },
+  {
+   "name": "Come See the Difference",
+   "start": 25,
+   "end": 30,
+   "image": 0,
+   "visual": "Return to the community exterior for a clean closing hero shot; CTA added later in editing.",
+   "narration": "Discover support, connection, and community at Morada Quintessence."
+  }
+ ],
+ "socialBScenes": [
+  {
+   "name": "When Care Needs Change",
+   "start": 0,
+   "end": 5,
+   "image": 1,
+   "visual": "Vertical close social image with calm, respectful framing that suggests a family beginning a care search.",
+   "narration": "When someone you love needs more daily support, the search can feel overwhelming."
+  },
+  {
+   "name": "Look for Everyday Support",
+   "start": 5,
+   "end": 10,
+   "image": 5,
+   "visual": "Comfortable lifestyle composition showing help with everyday responsibilities while preserving independence.",
+   "narration": "Start with support that protects independence and makes daily life easier."
+  },
+  {
+   "name": "Look for Connection",
+   "start": 10,
+   "end": 15,
+   "image": 3,
+   "visual": "Active social moment framed vertically around participation and companionship.",
+   "narration": "Look for activities and shared moments that help people stay connected."
+  },
+  {
+   "name": "Look at Mealtime",
+   "start": 15,
+   "end": 20,
+   "image": 2,
+   "visual": "Warm vertical dining composition emphasizing a welcoming shared meal.",
+   "narration": "See how dining brings good food and conversation together."
+  },
+  {
+   "name": "Look Beyond the Building",
+   "start": 20,
+   "end": 25,
+   "image": 4,
+   "visual": "Transportation image framed around access to appointments, errands, and community outings.",
+   "narration": "Transportation can help residents stay connected beyond the community."
+  },
+  {
+   "name": "Find the Right Fit",
+   "start": 25,
+   "end": 30,
+   "image": 0,
+   "visual": "Closing vertical exterior view of Morada Quintessence with a slow pullback; CTA added later.",
+   "narration": "The right community should feel supportive, connected, and comfortable for your family."
+  }
+ ],
+ "emailScenes": [
+  {
+   "name": "A Welcoming First Look",
+   "start": 0,
+   "end": 5,
+   "image": 0,
+   "visual": "Clean 16:9 exterior hero view with a gentle push-in; leave room for a simple CTA added later in editing.",
+   "narration": "Discover a welcoming approach to assisted living at Morada Quintessence."
+  },
+  {
+   "name": "Connection Every Day",
+   "start": 5,
+   "end": 10,
+   "image": 3,
+   "visual": "Warm activity moment showing residents engaged together in a comfortable community setting.",
+   "narration": "Enjoy daily opportunities for activity, connection, and companionship."
+  },
+  {
+   "name": "See What Life Can Feel Like",
+   "start": 10,
+   "end": 15,
+   "image": 1,
+   "visual": "Friendly social image followed by a clean end frame; website or contact CTA added later in editing.",
+   "narration": "See how support and community can come together every day."
+  }
+ ]
+}
