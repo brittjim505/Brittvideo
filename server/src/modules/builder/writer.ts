@@ -143,20 +143,25 @@ Each scene: {"name": string, "visual": string, "narration": string, "factIds": s
   const text: string = body?.content?.find((c: any) => c.type === 'text')?.text ?? '';
   const json = JSON.parse(text.slice(text.indexOf('{'), text.lastIndexOf('}') + 1));
   const factIds = new Set(inp.facts.map((f) => f.id)); const imageIds = new Set(inp.images.map((i) => i.id));
-  const check = (list: any[], n: number, label: string): SceneDraft[] => {
+  // Uncited opening and closing lines are never the AI's free text: they are replaced by BrittVideo's fixed wording,
+  // so nothing unsupported (an award, a ranking, a promise) can slip in there.
+  const closing = `${inp.businessName}. ${hooks.cta}` + (inp.websiteUrl ? ` Visit ${inp.websiteUrl.replace(/^https?:\/\//, '').replace(/\/$/, '')}.` : '');
+  const check = (list: any[], n: number, label: string, hook?: string): SceneDraft[] => {
     if (!Array.isArray(list) || list.length !== n) throw new Error(`${label}: expected ${n} scenes`);
     return list.map((s, i) => {
       const ids: string[] = Array.isArray(s.factIds) ? s.factIds : [];
       if (ids.some((id) => !factIds.has(id))) throw new Error(`${label} scene ${i + 1} cites an unknown fact`);
-      const narration = String(s.narration ?? '').trim();
+      let narration = String(s.narration ?? '').trim();
       if (narration.split(/\s+/).length > 24) throw new Error(`${label} scene ${i + 1} narration too long`);
       const cta = i === n - 1, opener = i === 0;
       if (!ids.length && narration && !cta && !opener) throw new Error(`${label} scene ${i + 1} has uncited narration`);
+      if (!ids.length && opener) narration = hook ?? `Welcome to ${inp.businessName}.`;
+      if (!ids.length && cta) narration = closing;
       return { name: String(s.name ?? `Scene ${i + 1}`).slice(0, 80), start_s: i * SCENE_SECONDS, end_s: (i + 1) * SCENE_SECONDS,
         visual: String(s.visual ?? '').slice(0, 600), narration: narration.slice(0, 300), factIds: ids,
         imageId: s.imageId && imageIds.has(s.imageId) ? s.imageId : pickImage(narration, inp.images, null, i) };
     });
   };
-  return { website: check(json.website, counts.website, 'Website'), social_a: check(json.social_a, 6, 'Social A'), social_b: check(json.social_b, 6, 'Social B'),
+  return { website: check(json.website, counts.website, 'Website'), social_a: check(json.social_a, 6, 'Social A', hooks.socialA), social_b: check(json.social_b, 6, 'Social B', hooks.socialB),
     email: check(json.email, 3, 'Email'), writtenBy: `ai:${model}` };
 }

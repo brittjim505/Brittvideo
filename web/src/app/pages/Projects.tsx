@@ -100,10 +100,17 @@ export function ProjectDetail() {
 }
 
 /** Quick Video / Email Video: edit the narration or the whole script, approve, then download. */
+const NARR_START = 'FINAL NARRATION — EDIT AS NEEDED\n', NARR_END = '\n\nPRODUCTION PLAN';
+/** The narration as it currently stands in the saved script (the script is the single source of truth). */
+function narrationOf(script: string, fallback: string) {
+  const i = script.indexOf(NARR_START), j = script.indexOf(NARR_END, i + NARR_START.length);
+  return i < 0 || j < 0 ? fallback : script.slice(i + NARR_START.length, j).trim().replace(/^“|”$/g, '');
+}
 function QuickScript({ projectId, d, st, settings, onChange }: { projectId: string; d: any; st: any; settings: any; onChange: () => void }) {
-  const [narration, setNarration] = useState(settings?.narration ?? ''); const a = useAction();
+  const [narration, setNarration] = useState(() => narrationOf(d.script_text, settings?.narration ?? '')); const a = useAction();
+  useEffect(() => { setNarration(narrationOf(d.script_text, settings?.narration ?? '')); }, [d.script_hash]);  // eslint-disable-line
   const saveNarration = () => a.run(async () => {
-    const start = 'FINAL NARRATION — EDIT AS NEEDED\n', end = '\n\nPRODUCTION PLAN';
+    const start = NARR_START, end = NARR_END;
     const i = d.script_text.indexOf(start), j = d.script_text.indexOf(end, i + start.length);
     if (i < 0 || j < 0) throw new Error('The narration section was not found in the script. Edit the full script below instead.');
     await put(`/api/projects/${projectId}/deliverables/${d.id}/script`, { text: d.script_text.slice(0, i) + start + '“' + narration.trim() + '”' + d.script_text.slice(j) }); onChange();
@@ -132,6 +139,7 @@ function EditScene({ projectId, s, onClose }: { projectId: string; s: any; onClo
 
 function DeliverableScript({ projectId, d, approved, onChange }: { projectId: string; d: any; approved: boolean; onChange: () => void }) {
   const [text, setText] = useState(d?.script_text ?? ''); const a = useAction();
+  useEffect(() => { setText(d?.script_text ?? ''); }, [d?.script_hash]);  // eslint-disable-line — always edit the latest saved script
   return <div>
     <Field label="Script" help="Editing an approved script removes its approval until you approve it again."><textarea style={{ minHeight: 220, fontFamily: 'ui-monospace, Menlo, monospace', fontSize: 14 }} value={text} onChange={(e) => setText(e.target.value)} /></Field>
     <div className="actions">

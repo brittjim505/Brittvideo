@@ -264,7 +264,7 @@ function StepDownload({ b, reload }: { b: any; reload: () => void }) {
   return <section className="card">
     {!ok ? <div className="notice warn">Approve the Complete Video Kit (Step 7) to unlock downloads.</div> : <>
       <p>The kit contains every script as a file for each format (Website, Social A and B in Landscape 16:9, Vertical 9:16 and Square 1:1, and Email), the pictures used, and where every fact came from.</p>
-      <div className="actions"><a className={'btn ' + (!downloaded ? 'next' : '')} href={`/api/projects/${b.project.id}/download/kit`} onClick={() => setTimeout(reload, 1500)}>DOWNLOAD COMPLETE VIDEO KIT</a></div>
+      <div className="actions"><a className={'btn ' + (!downloaded ? 'next' : '')} href={`/api/projects/${b.project.id}/download/kit`} onClick={() => [1500, 4000, 9000].forEach((ms) => setTimeout(reload, ms))}>DOWNLOAD COMPLETE VIDEO KIT</a></div>
       <h2 style={{ marginTop: 20 }}>Record delivery</h2>
       <p className="help">After you send or hand over the finished files, record it here. BrittVideo won’t record a delivery before the approved kit is downloaded.</p>
       <div className="grid"><Field label="How was it delivered?"><input value={method} onChange={(e) => setMethod(e.target.value)} /></Field><Field label="Note (optional)"><input value={ref} onChange={(e) => setRef(e.target.value)} placeholder="Sent to the office manager" /></Field></div>

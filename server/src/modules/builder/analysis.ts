@@ -77,8 +77,14 @@ export function rankFacts(all: { text: string; url: string }[], industry: string
   return scored.sort((a, b) => b.score - a.score).slice(0, max);
 }
 
+const running = new Set<string>();   // one analysis per project at a time (double-click / second tab)
 export async function analyzeWebsite(pool: pg.Pool, actor: Actor, projectId: string, urlOverride?: string) {
   requirePerm(actor, 'work');
+  if (running.has(projectId)) throw new OwnerError('BrittVideo is already reading this website. Please wait for it to finish.', 409, 'analysis_running');
+  running.add(projectId);
+  try { return await analyzeWebsiteOnce(pool, actor, projectId, urlOverride); } finally { running.delete(projectId); }
+}
+async function analyzeWebsiteOnce(pool: pg.Pool, actor: Actor, projectId: string, urlOverride?: string) {
   const p = (await pool.query(`SELECT p.*, coalesce(c.business_name, pr.business_name) AS business_name, coalesce(c.website_url, pr.website_url) AS website_url, p.client_id
     FROM projects p LEFT JOIN clients c ON c.id=p.client_id LEFT JOIN prospects pr ON pr.id=p.prospect_id WHERE p.id=$1`, [projectId])).rows[0];
   if (!p) throw notFound('project');
@@ -113,7 +119,7 @@ export async function analyzeWebsite(pool: pg.Pool, actor: Actor, projectId: str
   const ranked = rankFacts(found, p.industry ?? 'other', p.business_name);
 
   // Download up to 12 candidate images (content-addressed; permanently deleted images are never brought back — T14).
-  const assets: string[] = [];
+  const assets: { id: string; usable: boolean }[] = [];
   let tried = 0;
   for (const img of imageCandidates.values()) {
     if (assets.length >= 12 || tried >= 30) break;
@@ -125,6 +131,7 @@ export async function analyzeWebsite(pool: pg.Pool, actor: Actor, projectId: str
       const hash = sha256(r.body);
       const existing = (await pool.query(`SELECT id, status FROM assets WHERE sha256=$1 ORDER BY created_at LIMIT 1`, [hash])).rows[0];
       if (existing?.status === 'permanently_deleted') continue;
+      if (assets.some((x) => x.id === existing?.id)) continue;
       let assetId = existing?.id;
       if (!assetId) {
         const obj = putObject(r.body, type[1] === 'jpeg' ? 'jpg' : type[1]);
@@ -133,7 +140,7 @@ export async function analyzeWebsite(pool: pg.Pool, actor: Actor, projectId: str
           VALUES ($1,$2,'Client website','website',$3,$4,'available','working',$5,$6,$7,$8,$9,$10) RETURNING id`,
           [p.client_id, name.slice(0, 120), img.url, `From ${new URL(img.page).hostname} — confirm the client's permission before final production.`, obj.key, hash, obj.bytes, `image/${type[1] === 'jpg' ? 'jpeg' : type[1]}`, img.alt || null, actor.userId])).rows[0].id;
       }
-      assets.push(assetId);
+      assets.push({ id: assetId, usable: !existing || ['available', 'approved'].includes(existing.status) });
     } catch { /* one bad image never stops the analysis */ }
   }
 
@@ -150,13 +157,24 @@ export async function analyzeWebsite(pool: pg.Pool, actor: Actor, projectId: str
     const a = (await t.query(`INSERT INTO website_analyses (project_id, url, status, pages, owner_message, created_by_label) VALUES ($1,$2,$3,$4,$5,$6) RETURNING *`,
       [projectId, url, status, JSON.stringify(pages), ownerMessage, actor.label])).rows[0];
     if (status !== 'failed') {
-      // Replace earlier website facts that no scene uses; keep facts that scenes were written from (grounding history).
-      await t.query(`DELETE FROM project_facts f WHERE f.project_id=$1 AND f.source_kind='website'
-        AND NOT EXISTS (SELECT 1 FROM scenes s JOIN deliverables d ON d.id=s.deliverable_id WHERE d.project_id=$1 AND f.id = ANY(s.fact_ids))`, [projectId]);
+      // Re-analysis respects the owner's earlier choices: a website statement the owner unticked stays unticked,
+      // and statements still on file (kept, or used by scenes) are not duplicated. Unused website facts are refreshed.
+      const norm = (x: string) => x.toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim();
+      const prior = (await t.query(`SELECT id, text, selected, EXISTS (SELECT 1 FROM scenes s JOIN deliverables d ON d.id=s.deliverable_id WHERE d.project_id=$1 AND f.id = ANY(s.fact_ids)) AS used
+        FROM project_facts f WHERE f.project_id=$1 AND f.source_kind='website'`, [projectId])).rows;
+      const choice = new Map(prior.map((f) => [norm(f.text), f.selected as boolean]));
+      const kept = new Set(prior.filter((f) => f.used).map((f) => norm(f.text)));
+      const owned = new Set((await t.query(`SELECT text FROM project_facts WHERE project_id=$1 AND source_kind='owner'`, [projectId])).rows.map((f) => norm(f.text)));
+      await t.query(`DELETE FROM project_facts f WHERE f.project_id=$1 AND f.source_kind='website' AND NOT (f.id = ANY($2::uuid[]))`,
+        [projectId, prior.filter((f) => f.used).map((f) => f.id)]);
       let pos = 0;
-      for (const f of ranked) await t.query(`INSERT INTO project_facts (project_id, analysis_id, text, source_url, source_kind, selected, position) VALUES ($1,$2,$3,$4,'website',true,$5)`,
-        [projectId, a.id, f.text, f.url, pos++]);
-      for (const id of assets) await t.query(`INSERT INTO project_images (project_id, asset_id, selected, position) VALUES ($1,$2,true,$3) ON CONFLICT DO NOTHING`, [projectId, id, pos++]);
+      for (const f of ranked) {
+        const k = norm(f.text);
+        if (kept.has(k) || owned.has(k)) continue;
+        await t.query(`INSERT INTO project_facts (project_id, analysis_id, text, source_url, source_kind, selected, position) VALUES ($1,$2,$3,$4,'website',$5,$6)`,
+          [projectId, a.id, f.text, f.url, choice.get(k) ?? true, pos++]);
+      }
+      for (const x of assets) await t.query(`INSERT INTO project_images (project_id, asset_id, selected, position) VALUES ($1,$2,$3,$4) ON CONFLICT DO NOTHING`, [projectId, x.id, x.usable, pos++]);
     }
     await t.query(`UPDATE projects SET status=CASE WHEN status='ready_to_start' THEN 'in_progress' ELSE status END, workflow_step=GREATEST(workflow_step,3) WHERE id=$1`, [projectId]);
     await createCheckpoint(t, projectId, 'website_analyzed', `Website analyzed (${status})`, actor.label);
@@ -174,6 +192,7 @@ export async function listFacts(q: pg.Pool, projectId: string) {
 export async function addFact(pool: pg.Pool, actor: Actor, projectId: string, text: string) {
   requirePerm(actor, 'work');
   const t = clean(text ?? '');
+  if (!(await pool.query(`SELECT 1 FROM projects WHERE id=$1`, [projectId])).rowCount) throw notFound('project');
   if (t.length < 5) throw new OwnerError('Type a fact about the business (for example "Family-owned since 1998").');
   if (t.length > 400) throw new OwnerError('Please keep each fact under 400 characters.');
   const pos = (await pool.query(`SELECT coalesce(max(position),0)+1 AS n FROM project_facts WHERE project_id=$1`, [projectId])).rows[0].n;

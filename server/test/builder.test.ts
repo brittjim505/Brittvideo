@@ -316,3 +316,121 @@ describe('script writers', () => {
     await expect(claudeWriter(input, 'k', 'm', fetcher(invented))).rejects.toThrow(/unknown fact/);
   });
 });
+
+describe('Phase 3 independent review fixes', () => {
+  const newSale = async (c: any, name: string) => (await c.post('/api/sales', { saleKey: uid(), channel: 'manual', package: 'standard',
+    business: { businessName: name, industry: 'dental', websiteUrl: base }, agreement: { accepted: true, name: 'Dr S' } })).json.projectId;
+  const approveAll = async (c: any, pid: string) => {
+    let b = (await c.get(`/api/projects/${pid}/builder`)).json;
+    for (const d of b.status.deliverables) await c.post(`/api/projects/${pid}/approve-many`, { items: b.scenes.filter((s: any) => s.deliverable_id === d.id).map((s: any) => ({ id: s.id, expectedHash: s.content_hash })) });
+    b = (await c.get(`/api/projects/${pid}/builder`)).json;
+    await c.post(`/api/projects/${pid}/approve`, { type: 'kit', expectedHash: b.status.compositeHash });
+    return (await c.get(`/api/projects/${pid}/builder`)).json;
+  };
+  const BUILD = { story: 'New Patient Experience', tone: 'Friendly', websiteSecs: 30, platform: 'HeyGen' };
+
+  it('IPv6 forms of private addresses are refused (brackets, IPv4-mapped hex, NAT64, 6to4)', async () => {
+    for (const ip of ['[::1]', '::ffff:7f00:1', '::ffff:a9fe:a9fe', '64:ff9b::a9fe:a9fe', '2002:a9fe:a9fe::1', 'fe80::1', '::127.0.0.1', 'not-an-ip'])
+      expect(fetchTest.isPrivate(ip)).toBe(true);
+    for (const ip of ['::ffff:8.8.8.8', '2a00:1450:4001:80b::200e']) expect(fetchTest.isPrivate(ip)).toBe(false);
+    process.env.ALLOW_PRIVATE_FETCH = 'false';
+    try { for (const u of ['http://[::1]/', 'http://[::ffff:127.0.0.1]/', 'http://[::ffff:a9fe:a9fe]/']) await expect(safeFetch(u)).rejects.toThrow(/private network/); }
+    finally { process.env.ALLOW_PRIVATE_FETCH = 'true'; }
+  });
+
+  it('analyzing again keeps facts the owner unticked unticked, and does not duplicate', async () => {
+    const c = await jim(); const pid = await newSale(c, 'Reanalyze Dental');
+    await c.post(`/api/projects/${pid}/analyze`);
+    let b = (await c.get(`/api/projects/${pid}/builder`)).json;
+    const ins = b.facts.find((f: any) => /insurance/.test(f.text));
+    await c.patch(`/api/projects/${pid}/facts/${ins.id}`, { selected: false });
+    const n = b.facts.length;
+    await c.post(`/api/projects/${pid}/analyze`);
+    b = (await c.get(`/api/projects/${pid}/builder`)).json;
+    expect(b.facts.length).toBe(n);
+    expect(b.facts.filter((f: any) => /insurance/.test(f.text)).map((f: any) => f.selected)).toEqual([false]);
+  });
+
+  it('marking a used picture Do Not Use (or deleting it) withdraws the kit approval and it never ships', async () => {
+    const c = await jim(); const pid = await newSale(c, 'Picture Dental');
+    await c.post(`/api/projects/${pid}/analyze`); await c.post(`/api/projects/${pid}/build`, BUILD);
+    let b = await approveAll(c, pid);
+    expect(b.status.completeVideoKitApproved).toBe(true);
+    const used = b.scenes.find((s: any) => s.image_ref?.assetId).image_ref.assetId;
+    await c.patch(`/api/images/${used}`, { status: 'do_not_use' });
+    b = (await c.get(`/api/projects/${pid}/builder`)).json;
+    expect(b.status.completeVideoKitApproved).toBe(false);
+    expect(b.scenes.some((s: any) => s.image_ref?.assetId === used)).toBe(false);
+    expect((await c.raw('GET', `/api/projects/${pid}/download/kit`)).status).toBe(409);
+    // Deleting a picture that is in use behaves the same way.
+    b = await approveAll(c, pid);
+    const used2 = b.scenes.find((s: any) => s.image_ref?.assetId).image_ref.assetId;
+    expect((await c.post('/api/images/delete', { ids: [used2] })).status).toBe(409);
+    await c.post('/api/images/delete', { ids: [used2], confirmInUse: true });
+    b = (await c.get(`/api/projects/${pid}/builder`)).json;
+    expect(b.status.completeVideoKitApproved).toBe(false);
+    expect(b.scenes.some((s: any) => s.image_ref?.assetId === used2)).toBe(false);
+    await c.post('/api/images/restore', { ids: [used2] }); await c.patch(`/api/images/${used}`, { status: 'available' });
+  });
+
+  it('the scene edit route only changes words; pictures go through the checked route', async () => {
+    const c = await jim(); const pid = await newSale(c, 'Route Dental');
+    await c.post(`/api/projects/${pid}/analyze`); await c.post(`/api/projects/${pid}/build`, BUILD);
+    const b = (await c.get(`/api/projects/${pid}/builder`)).json;
+    const s = b.scenes[1];
+    await c.patch(`/api/projects/${pid}/scenes/${s.id}`, { image_ref: { assetId: 'not-a-uuid' }, visual: 'A calm shot.' });
+    const after = (await c.get(`/api/projects/${pid}/builder`)).json.scenes.find((x: any) => x.id === s.id);
+    expect(after.image_ref).toEqual(s.image_ref); expect(after.visual).toBe('A calm shot.');
+    expect((await c.patch(`/api/projects/${pid}/scenes/${s.id}`, { narration: 'x'.repeat(1300) })).status).toBe(400);
+    const ok = await approveAll(c, pid);
+    expect((await c.raw('GET', `/api/projects/${pid}/download/kit`)).status).toBe(200);
+    expect(ok.status.completeVideoKitApproved).toBe(true);
+  });
+
+  it('building again over the owner\'s rewrites asks first, saves a copy, and restore brings back the right sources', async () => {
+    const c = await jim(); const pid = await newSale(c, 'Rewrite Dental');
+    await c.post(`/api/projects/${pid}/analyze`); await c.post(`/api/projects/${pid}/build`, BUILD);
+    let b = (await c.get(`/api/projects/${pid}/builder`)).json;
+    const cited = b.scenes.find((s: any) => s.fact_ids.length && s.position > 1);
+    const originalFacts = cited.fact_ids;
+    await c.patch(`/api/projects/${pid}/scenes/${cited.id}`, { narration: 'My own words about our gentle team.' });
+    const r = await c.post(`/api/projects/${pid}/build`, BUILD);
+    expect(r.status).toBe(409); expect(r.json.error.message).toMatch(/your own rewritten words.*saved first/);
+    expect((await c.post(`/api/projects/${pid}/build`, { ...BUILD, confirmReplaceApproved: true })).status).toBe(200);
+    const cps = (await db().query(`SELECT id, stage FROM checkpoints WHERE project_id=$1 ORDER BY created_at`, [pid])).rows;
+    const before = cps.filter((x) => x.stage === 'before_rebuild').pop();
+    expect(before).toBeTruthy();
+    await c.post(`/api/projects/${pid}/checkpoints/${before.id}/restore`);
+    b = (await c.get(`/api/projects/${pid}/builder`)).json;
+    let back = b.scenes.find((s: any) => s.narration === 'My own words about our gentle team.');
+    expect(back.fact_ids).toEqual([]); expect(back.written_by).toBe('owner');
+    const firstBuild = cps.find((x) => x.stage === 'scripts_built');
+    await c.post(`/api/projects/${pid}/checkpoints/${firstBuild.id}/restore`);
+    b = (await c.get(`/api/projects/${pid}/builder`)).json;
+    back = b.scenes.find((s: any) => s.deliverable_id === cited.deliverable_id && s.position === cited.position);
+    expect(back.narration).toBe(cited.narration); expect(back.fact_ids).toEqual(originalFacts);
+  });
+
+  it('the AI writer cannot put its own claims in the opening or closing scenes', async () => {
+    const facts = [{ id: 'f1', text: 'We have cared for families since 1998.' }];
+    const input = { businessName: 'Sunrise', industry: 'dental', story: 'Office Tour', tone: 'Friendly', facts, images: [], websiteSecs: 30, websiteUrl: 'https://sunrise.example' };
+    const sc = (n: string, ids: string[] = []) => ({ name: 'S', visual: 'v', narration: n, factIds: ids, imageId: null });
+    const mid = Array(4).fill(sc('Families since 1998.', ['f1']));
+    const body = { website: [sc('Rated number one dentist in America.'), ...mid, sc('Book today. Winner of the 2025 Best Dentist award.')],
+      social_a: [sc('Best in town?'), ...mid, sc('Award winning!')], social_b: [sc('Top rated?'), ...mid, sc('Voted #1')], email: [sc('Hi, from the #1 dentist'), sc('Since 1998.', ['f1']), sc('Call now, best prices')] };
+    const k = await claudeWriter(input as any, 'k', 'm', async () => ({ ok: true, status: 200, json: async () => ({ content: [{ type: 'text', text: JSON.stringify(body) }] }) }) as any);
+    const all = [...k.website, ...k.social_a, ...k.social_b, ...k.email].map((s) => s.narration).join(' ');
+    expect(all).not.toMatch(/number one|award|#1|best|top rated/i);
+    expect(k.website[0].narration).toBe('Welcome to Sunrise.');
+    expect(k.website[5].narration).toMatch(/^Sunrise\. .*Visit sunrise\.example\.$/);
+  });
+
+  it('recording the same delivery twice in a row is refused', async () => {
+    const c = await jim(); const pid = await newSale(c, 'Twice Dental');
+    await c.post(`/api/projects/${pid}/analyze`); await c.post(`/api/projects/${pid}/build`, BUILD);
+    await approveAll(c, pid);
+    await a.inject({ method: 'GET', url: `/api/projects/${pid}/download/kit`, headers: { cookie: await loginCookie() } });
+    expect((await c.post(`/api/projects/${pid}/delivery`, { method: 'Email' })).status).toBe(200);
+    expect((await c.post(`/api/projects/${pid}/delivery`, { method: 'Email' })).json.error.code).toBe('duplicate_delivery');
+  });
+});

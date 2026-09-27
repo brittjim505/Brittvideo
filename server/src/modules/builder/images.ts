@@ -6,6 +6,7 @@ import { OwnerError, notFound } from '../../lib/errors.js';
 import { sha256 } from '../../lib/util.js';
 import { audit } from '../audit/service.js';
 import { putObject, deleteObject } from '../../integrations/storage.js';
+import { detachImageFromScenes } from '../projects/service.js';
 
 /**
  * Image Library (T1–T21). States: available, approved, do_not_use, recently_deleted, permanently_deleted (tombstone).
@@ -74,7 +75,10 @@ export async function updateImage(pool: pg.Pool, actor: Actor, id: string, patch
     if (patch.status && !['available', 'approved', 'do_not_use'].includes(patch.status)) throw new OwnerError('Choose Available, Approved or Do Not Use.');
     const after = (await t.query(`UPDATE assets SET title=$2, category=$3, status=$4, outdated_flag=$5 WHERE id=$1 RETURNING *`,
       [id, (patch.title ?? a.title).slice(0, 120), patch.category ?? a.category, patch.status ?? a.status, patch.outdated ?? a.outdated_flag])).rows[0];
-    if (patch.status === 'do_not_use') await t.query(`UPDATE project_images SET selected=false WHERE asset_id=$1`, [id]);
+    if (patch.status === 'do_not_use' && a.status !== 'do_not_use') {
+      await t.query(`UPDATE project_images SET selected=false WHERE asset_id=$1`, [id]);
+      await detachImageFromScenes(t, actor, [id], 'marked Do Not Use');
+    }
     await audit(t, actor, 'image.updated', { type: 'asset', id }, `Image "${after.title}": ${patch.status ? 'marked ' + patch.status.replace(/_/g, ' ') : 'details changed'}`);
     return publicAsset(after);
   }, pool);
@@ -88,10 +92,11 @@ export async function deleteImages(pool: pg.Pool, actor: Actor, ids: string[], c
     const rows = (await t.query(`SELECT a.id, a.title, ${USAGE_SQL} AS in_use FROM assets a WHERE a.id = ANY($1::uuid[]) AND a.status NOT IN ('recently_deleted','permanently_deleted')`, [ids])).rows;
     const used = rows.filter((r) => r.in_use > 0);
     if (used.length && !confirmInUse) {
-      throw new OwnerError(`${used.map((u) => `"${u.title}"`).join(', ')} ${used.length === 1 ? 'is' : 'are'} used in a project. Delete anyway? Projects keep their record of the image, but its picture will no longer be available.`, 409, 'in_use', { inUse: used.map((u) => u.id) });
+      throw new OwnerError(`${used.map((u) => `"${u.title}"`).join(', ')} ${used.length === 1 ? 'is' : 'are'} used in a project. Delete anyway? Scenes using it will lose the picture and need a new one — and approval again.`, 409, 'in_use', { inUse: used.map((u) => u.id) });
     }
     await t.query(`UPDATE assets SET status='recently_deleted', deleted_at=now() WHERE id = ANY($1::uuid[])`, [rows.map((r) => r.id)]);
     await t.query(`UPDATE project_images SET selected=false WHERE asset_id = ANY($1::uuid[])`, [rows.map((r) => r.id)]);
+    await detachImageFromScenes(t, actor, rows.map((r) => r.id), 'picture deleted');
     await audit(t, actor, 'image.deleted', { type: 'asset', id: rows.map((r) => r.id).join(',').slice(0, 200) }, `${rows.length} image(s) moved to Recently Deleted`);
     return { deleted: rows.length };
   }, pool);
@@ -128,6 +133,7 @@ export async function projectImages(pool: pg.Pool, projectId: string) {
 }
 export async function setProjectImage(pool: pg.Pool, actor: Actor, projectId: string, assetId: string, selected: boolean) {
   requirePerm(actor, 'work');
+  if (!(await pool.query(`SELECT 1 FROM projects WHERE id=$1`, [projectId])).rowCount) throw notFound('project');
   const a = (await pool.query(`SELECT status FROM assets WHERE id=$1`, [assetId])).rows[0];
   if (!a || ['recently_deleted', 'permanently_deleted'].includes(a.status)) throw notFound('image');
   if (selected && a.status === 'do_not_use') throw new OwnerError('That image is marked Do Not Use. Change it in the Image Library first if you want to use it.', 409, 'do_not_use');

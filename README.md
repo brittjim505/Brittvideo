@@ -5,9 +5,9 @@ video builder → production → delivery → follow-up and Premier. This reposi
 prototype with a secure, cloud-ready application, built in stages from the owner's specification package
 (`docs/spec/`).
 
-**Current stage:** Phase 1 (foundation) + Phase 2 (sales) complete — see `docs/ACCEPTANCE_STATUS.md` for exactly what
-is done and tested, and what is not yet. The video Builder still runs in the **V2.11.23 bridge build**
-(`prototype/BrittVideo_Builder_V2.11.23_BRIDGE.html`) until Phase 3.
+**Current stage:** Phases 1–3 complete (foundation, sales, Builder) — see `docs/ACCEPTANCE_STATUS.md` for exactly what
+is done and tested, and what is not yet. Next: Phase 4 (AI video production through the provider). The V2.11.23 bridge
+build (`prototype/`) is kept only for exporting old data into 3.0.
 
 | Where | What |
 |---|---|

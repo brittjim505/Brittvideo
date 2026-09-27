@@ -2,6 +2,29 @@
 
 Requirement-affecting changes only. Newest first.
 
+## 3.0.0-phase3 — 2026-09-27
+
+### Added — Builder (Phase 3)
+- 8-step Builder inside the app (SELECT CLIENT → ANALYZE WEBSITE → REVIEW IMAGES → CHOOSE STORY → BUILD VIDEOS →
+  REVIEW SCENES → APPROVE → DOWNLOAD) with "YOU ARE HERE: STEP n OF 8"; the owner stays on the step being worked on.
+- Website analysis reads the home page plus up to 4 useful linked pages; every fact shows the page it came from;
+  boilerplate dropped; real images collected. Private/internal network addresses are refused (incl. IPv6 forms).
+  Analyzing again keeps the owner's unticked facts unticked. Owner can add and edit facts.
+- Four videos built only from facts the owner kept: Website 30/60/90/120 s (5-second scenes), Social A and B
+  (16:9, 9:16, 1:1), Email. Optional AI writer (server-side key) must cite facts; its opening/closing lines are fixed
+  wording. Do Not Use pictures are never placed.
+- Scene review: approve, rewrite, change picture, approve all; rewritten words are cited as the owner's own.
+- Complete Video Kit download (approval-gated, consistent snapshot) with clean file names per format, pictures and
+  image sources; delivery can be recorded only after the approved kit was downloaded; delivered pictures protected.
+- Rebuilding saves a copy first and asks before replacing approved or owner-rewritten scenes; saved versions restore
+  the exact sources.
+- Marking a used picture Do Not Use (or deleting it) removes it from scenes and withdraws the kit approval.
+- Quick Video (8 purposes, 15–120 s, personalization) and standalone Email Video; script approve + download.
+- Image Library: search, categories, Available / Approved / Do Not Use, rename, unused, duplicates, Recently Deleted,
+  restore, permanent delete (tombstone; delivered pictures protected).
+- Text size control (A / A+ / A++, default A+); menu wraps at large sizes.
+- Independent review of Phase 3: 8 defects found and fixed, each with a regression test (79 automated tests).
+
 ## 3.0.0-phase2 — 2026-09-27
 
 ### Owner decisions recorded

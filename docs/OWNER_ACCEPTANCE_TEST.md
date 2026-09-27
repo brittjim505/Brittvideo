@@ -1,4 +1,4 @@
-# Owner Acceptance Test — Phase 2 (Sales)
+# Owner Acceptance Test — Phases 2 and 3 (Sales + Builder)
 
 For Jim. One step at a time. Words in **BOLD CAPITALS** are the exact button names on screen.
 If anything does not match what is written here, stop and press **GET SUPPORT** — then tell Claude which step number.
@@ -52,4 +52,23 @@ contacts real clients.
 ### Part F — Support
 29. Press **GET SUPPORT**, type "Acceptance test", press **PREPARE SUPPORT REPORT**, then **SEND FOR SUPPORT**.
 
-When all 29 steps match, Phase 2 is accepted. Tell Claude "Phase 2 accepted" (or the step numbers that didn't match).
+### Part G — Build a Video Kit (Phase 3)
+30. In **Projects**, open your test client and press **OPEN BUILDER**. At the top it says **YOU ARE HERE: STEP 2 OF 8**.
+31. Press **ANALYZE WEBSITE** and wait. You should see a green box and a list of facts, each with "From" and a web page.
+32. Untick one fact that is wrong or not useful. Type a fact of your own and press **ADD FACT**.
+33. Press **NEXT: REVIEW IMAGES →**. Press **DO NOT USE** on one picture you would not want in a video.
+34. Press **NEXT: CHOOSE STORY →**, pick a story, then **NEXT: BUILD VIDEOS →** and **BUILD 4 VIDEOS**.
+35. Read a few scenes. Check the Do Not Use picture and your unticked fact appear nowhere.
+36. Press **REWRITE SCENE** on one scene, change the words, press **SAVE SCENE**. Under it: "Source: your own words".
+37. In each tab press **APPROVE ALL … SCENES**, then **NEXT: APPROVE →** and **APPROVE COMPLETE VIDEO KIT**.
+38. Press **NEXT: DOWNLOAD →**, then **DOWNLOAD COMPLETE VIDEO KIT**. Open the downloaded file: scripts for each
+    format, a pictures folder and a sources file.
+39. Press **RECORD DELIVERY**. Under **Delivery history** your delivery appears.
+
+### Part H — Quick Video, Image Library, text size
+40. Press **Quick Video**. Choose your test client, **Review Request**, 30 seconds, a customer first name.
+    Press **BUILD QUICK VIDEO**. Change a word, **SAVE NARRATION**, then **APPROVE SCRIPT** and **DOWNLOAD SCRIPT**.
+41. Press **Image Library**. Pictures from the website are there. Try **Recently Deleted** after deleting one, then restore it.
+42. At the top right press **A++**. Everything gets larger and the whole menu still shows.
+
+When all 42 steps match, Phases 2 and 3 are accepted. Tell Claude "Phase 2 accepted" (or the step numbers that didn't match).

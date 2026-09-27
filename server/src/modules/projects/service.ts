@@ -125,8 +125,37 @@ export async function approve(pool: pg.Pool, actor: Actor, projectId: string, su
   }, pool);
 }
 
-/** Edit a scene. A material change to approved content invalidates that scene (and the final kit approval) — K10/W7. */
-export async function updateScene(pool: pg.Pool, actor: Actor, projectId: string, sceneId: string, patch: Partial<{ name: string; visual: string; narration: string; image_ref: unknown }>) {
+/**
+ * Remove a picture from every scene that uses it (it was marked Do Not Use or deleted). The scene's content changes,
+ * so its approval — and the Complete Video Kit approval — are withdrawn; the picture can never ship in a kit (T4, T6).
+ */
+export async function detachImageFromScenes(t: Queryable, actor: Actor, assetIds: string[], why: string) {
+  if (!assetIds.length) return 0;
+  const rows = (await t.query(`SELECT s.*, d.project_id FROM scenes s JOIN deliverables d ON d.id=s.deliverable_id
+    WHERE s.image_ref->>'assetId' = ANY($1::text[]) FOR UPDATE OF s`, [assetIds])).rows;
+  for (const s of rows) {
+    const h = sceneHash({ ...s, image_ref: null });
+    await t.query(`UPDATE scenes SET image_ref=NULL, content_hash=$2, content_version=content_version+1, updated_at=now() WHERE id=$1`, [s.id, h]);
+    await recordInvalidationIfApproved(t, actor, s.project_id, 'scene', s.id, s.content_hash, h, `Scene ${s.position} picture removed (${why})`);
+  }
+  return rows.length;
+}
+
+/** Edit a scene's words (name, visual, narration). Pictures change only through setSceneImage, which enforces Do Not Use. */
+export async function updateScene(pool: pg.Pool, actor: Actor, projectId: string, sceneId: string, input: Partial<{ name: string; visual: string; narration: string }>) {
+  const patch: Record<string, string> = {};
+  for (const [k, max] of [['name', 120], ['visual', 2000], ['narration', 1200]] as const) {
+    const v = (input as any)?.[k];
+    if (v === undefined) continue;
+    if (typeof v !== 'string') throw new OwnerError('Please type words for the scene.');
+    if (v.length > max) throw new OwnerError(`That is too long — please keep the ${k === 'name' ? 'scene name' : k} under ${max} characters.`);
+    patch[k] = k === 'name' ? v.trim() || 'Scene' : v.trim();
+  }
+  return updateSceneContent(pool, actor, projectId, sceneId, patch);
+}
+
+/** Internal: apply a validated scene change. A material change to approved content invalidates that scene (and the final kit approval) — K10/W7. */
+export async function updateSceneContent(pool: pg.Pool, actor: Actor, projectId: string, sceneId: string, patch: Partial<{ name: string; visual: string; narration: string; image_ref: unknown }>) {
   requirePerm(actor, 'work');
   return tx(async (t) => {
     const s = (await t.query(`SELECT s.* FROM scenes s JOIN deliverables d ON d.id=s.deliverable_id WHERE s.id=$1 AND d.project_id=$2 FOR UPDATE`, [sceneId, projectId])).rows[0];
@@ -167,7 +196,7 @@ async function recordInvalidationIfApproved(t: Queryable, actor: Actor, projectI
   // Mirrors prototype V2.11.13: an approved/downloaded kit returns to "changes made — reapproval required" and delivery is not claimed.
   if (kitWasFinal && ['approved', 'package_downloaded', 'delivered'].includes(kitWasFinal.status)) {
     await t.query(`UPDATE production_records SET status='needs_reapproval', updated_at=now() WHERE project_id=$1`, [projectId]);
-    await t.query(`UPDATE projects SET status='in_progress' WHERE id=$1 AND status IN ('approved','ready_for_delivery')`, [projectId]);
+    await t.query(`UPDATE projects SET status='in_progress' WHERE id=$1 AND status IN ('approved','ready_for_delivery','delivered')`, [projectId]);
     await audit(t, actor, 'project.final_approval_invalidated', { type: 'project', id: projectId }, `Final approval removed: ${reason}`);
   }
 }
@@ -178,7 +207,7 @@ async function recordInvalidationIfApproved(t: Queryable, actor: Actor, projectI
 async function snapshot(q: Queryable, projectId: string) {
   const project = (await q.query(`SELECT id, title, status, story, tone, settings, workflow_step FROM projects WHERE id=$1`, [projectId])).rows[0];
   const deliverables = (await q.query(`SELECT id, kind, label, duration_s, formats, script_text FROM deliverables WHERE project_id=$1 ORDER BY position`, [projectId])).rows;
-  const scenes = (await q.query(`SELECT s.deliverable_id, s.position, s.name, s.start_s, s.end_s, s.image_ref, s.visual, s.narration
+  const scenes = (await q.query(`SELECT s.deliverable_id, s.position, s.name, s.start_s, s.end_s, s.image_ref, s.visual, s.narration, s.fact_ids, s.written_by
     FROM scenes s JOIN deliverables d ON d.id=s.deliverable_id WHERE d.project_id=$1 ORDER BY d.position, s.position`, [projectId])).rows;
   return { project, deliverables, scenes };
 }
@@ -215,17 +244,32 @@ export async function restoreCheckpoint(pool: pg.Pool, actor: Actor, projectId: 
       }
       const want = snap.scenes.filter((s: any) => s.deliverable_id === d.id);
       const have = (await t.query(`SELECT * FROM scenes WHERE deliverable_id=$1 ORDER BY position`, [d.id])).rows;
-      for (const s of want) {
+      for (const raw of want) {
+        // Sources come back exactly as saved (older saved versions did not record them: those restore with no citation,
+        // never with the current build's citations). Facts removed since then are dropped; a picture now marked
+        // Do Not Use or deleted is not brought back into a scene.
+        const saved: string[] = Array.isArray(raw.fact_ids) ? raw.fact_ids : [];
+        const factIds = saved.length ? (await t.query(`SELECT id FROM project_facts WHERE project_id=$1 AND id = ANY($2::uuid[])`, [projectId, saved])).rows.map((r) => r.id) : [];
+        const writtenBy = 'written_by' in raw ? raw.written_by : 'restored';
+        let imageRef = raw.image_ref ?? null;
+        if (imageRef?.assetId) {
+          const ok = (await t.query(`SELECT 1 FROM assets WHERE id::text=$1 AND status IN ('available','approved')`, [String(imageRef.assetId)])).rowCount;
+          if (!ok) imageRef = null;
+        }
+        const s = { ...raw, image_ref: imageRef };
         const h2 = sceneHash(s); const existing = have.find((x) => x.position === s.position);
-        if (existing && existing.content_hash === h2) continue;
+        if (existing && existing.content_hash === h2) {
+          await t.query(`UPDATE scenes SET fact_ids=$2::uuid[], written_by=$3 WHERE id=$1`, [existing.id, factIds, writtenBy]);
+          continue;
+        }
         if (existing) {
           await t.query(`UPDATE scenes SET name=$2, start_s=$3, end_s=$4, image_ref=$5, visual=$6, narration=$7, content_hash=$8, content_version=content_version+1, updated_at=now(),
-              fact_ids=COALESCE($9::uuid[], fact_ids), written_by=COALESCE($10, written_by) WHERE id=$1`,
-            [existing.id, s.name, s.start_s, s.end_s, s.image_ref === null ? null : JSON.stringify(s.image_ref), s.visual, s.narration, h2, s.fact_ids ?? null, s.written_by ?? null]);
+              fact_ids=$9::uuid[], written_by=$10 WHERE id=$1`,
+            [existing.id, s.name, s.start_s, s.end_s, s.image_ref === null ? null : JSON.stringify(s.image_ref), s.visual, s.narration, h2, factIds, writtenBy]);
           await recordInvalidationIfApproved(t, actor, projectId, 'scene', existing.id, existing.content_hash, h2, `Scene ${s.position} restored from checkpoint`);
         } else {
-          await t.query(`INSERT INTO scenes (deliverable_id, position, name, start_s, end_s, image_ref, visual, narration, content_hash) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9)`,
-            [d.id, s.position, s.name, s.start_s, s.end_s, s.image_ref === null ? null : JSON.stringify(s.image_ref), s.visual, s.narration, h2]);
+          await t.query(`INSERT INTO scenes (deliverable_id, position, name, start_s, end_s, image_ref, visual, narration, content_hash, fact_ids, written_by) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11)`,
+            [d.id, s.position, s.name, s.start_s, s.end_s, s.image_ref === null ? null : JSON.stringify(s.image_ref), s.visual, s.narration, h2, factIds, writtenBy]);
         }
       }
       for (const extra of have.filter((x) => !want.some((s: any) => s.position === x.position))) {
@@ -246,7 +290,7 @@ async function syncProductionState(t: Queryable, projectId: string) {
   if (!rec) return;
   if (!st.completeVideoKitApproved && ['approved', 'package_downloaded', 'delivered'].includes(rec.status)) {
     await t.query(`UPDATE production_records SET status='needs_reapproval', updated_at=now() WHERE project_id=$1`, [projectId]);
-    await t.query(`UPDATE projects SET status='in_progress' WHERE id=$1 AND status IN ('approved','ready_for_delivery')`, [projectId]);
+    await t.query(`UPDATE projects SET status='in_progress' WHERE id=$1 AND status IN ('approved','ready_for_delivery','delivered')`, [projectId]);
   } else if (st.completeVideoKitApproved && rec.status === 'needs_reapproval') {
     await t.query(`UPDATE production_records SET status='approved', updated_at=now() WHERE project_id=$1`, [projectId]);
     await t.query(`UPDATE projects SET status='approved' WHERE id=$1 AND status='in_progress'`, [projectId]);

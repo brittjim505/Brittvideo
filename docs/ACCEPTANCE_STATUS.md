@@ -1,10 +1,10 @@
-# Acceptance Status — 2026-09-27 (BrittVideo 3.0.0-phase2)
+# Acceptance Status — 2026-09-27 (BrittVideo 3.0.0-phase3)
 
 Legend: **PASS (automated)** = covered by a passing automated test · **PASS (browser)** = exercised end-to-end in
 Chromium (`e2e/`) · **BUILT – NEEDS OWNER TEST** · **PARTIAL** · **NOT BUILT (Phase n)**. Nothing is marked production-ready:
 the spec requires every applicable item to pass, plus owner acceptance on real iPad/Mac devices.
 
-Test files: `server/test/security.test.ts` (S), `sales.test.ts` (Sa), `integrity.test.ts` (I), `review-regressions.test.ts` (R).
+Test files: `server/test/security.test.ts` (S), `sales.test.ts` (Sa), `integrity.test.ts` (I), `review-regressions.test.ts` (R), `builder.test.ts` (B). Builder browser walkthrough: `e2e/e2e4-builder.js`.
 
 ## Sales
 | Item | Status | Evidence |
@@ -20,11 +20,14 @@ Test files: `server/test/security.test.ts` (S), `sales.test.ts` (Sa), `integrity
 ## Builder
 | Item | Status |
 |---|---|
-| Website, images, story, scripts, narration, scenes and approvals persist | PARTIAL — scenes, scripts and approvals persist centrally (incl. imported V2 work); Builder screens are Phase 3 (use V2.11.23 meanwhile) |
+| Website, images, story, scripts, narration, scenes and approvals persist | PASS (automated + browser) — B analysis/build/review tests; e2e4 full 8-step walkthrough. Needs owner test on a real client site |
+| Website analysis grounded (facts show source page; nothing invented) | PASS (automated) — B "reads the site…", AI writer citation + fixed opening/closing tests |
+| Image Library (states, Do Not Use, delete/restore, permanent delete, duplicates) | PASS (automated + browser) — B Image Library + review-fix tests |
+| Complete Video Kit download + delivery record | PASS (automated + browser) — B "approval → download → delivery"; e2e4 steps 07–08 |
 | Primary video up to 120 s | PASS (schema limit 120 s; V2.11.23 builds 120 s kits) |
 | Social 16:9, 9:16, 1:1 | PASS for data model (Social A/B carry all three formats); rendering Phase 4 |
 | Email Video separate | PASS (separate deliverable; standalone Email Video project kind) |
-| Quick Video 15/30/60/90/120 + purposes | PARTIAL — durations enforced; purposes stored; creation screen Phase 3 (V2.11.23 meanwhile) |
+| Quick Video 15/30/60/90/120 + purposes | PASS (automated + browser) — B Quick Video tests; e2e4 step 09 |
 | Complete Video Kit derived from valid approvals | PASS (automated) — I "approval integrity" |
 | Editing an approved dependency invalidates only affected approvals | PASS (automated + browser) — I "a material edit…"; e2e2 step 19 |
 | No false green/completed states | PASS (automated) — new projects never show approved; restore re-syncs production state; R #4 |
@@ -32,8 +35,8 @@ Test files: `server/test/security.test.ts` (S), `sales.test.ts` (Sa), `integrity
 ## Production — NOT BUILT (Phase 4)
 Adapter contract drafted in `docs/PROVIDER_ADAPTERS.md`. Secrets are server-side only (PASS, S "secrets never leave the server").
 
-## Delivery — NOT BUILT (Phase 5)
-Delivery record and "delivered" history from V2 are preserved on import. Hosting tracked separately from ownership (schema).
+## Delivery — PARTIAL
+Kit download + delivery record built (Phase 3). Hosting/Vimeo delivery links are Phase 5. Delivery record and "delivered" history from V2 are preserved on import. Hosting tracked separately from ownership (schema).
 
 ## Premier
 | Item | Status |
@@ -61,7 +64,7 @@ Marketing preference and unsubscribe protection are built and tested now (Sa "ma
 |---|---|
 | Autosave works | PASS (browser + automated) — e2e step 03; R #2 conflicts |
 | Checkpoints work | PASS (automated) — I checkpoint restore |
-| Crash/session recovery | PARTIAL — Continue Working + drafts + checkpoints; full Builder session restore arrives with the Builder |
+| Crash/session recovery | PASS (automated) for Builder work — every step saved server-side; automatic safety copy before rebuild/restore. Needs owner test |
 | Backup/restore tested, not merely documented | PASS (automated) — I backup tests; R #6 atomic restore + media. **Still required: restore drill on the live host.** |
 | Safe retries verify external status first | PASS (automated) for payments (pending attempt resumed/checked) |
 | Health checks cover DB/storage, production, Square, Vimeo, comms, cloud | PARTIAL — DB, storage, backups, jobs, Square state live; production/Vimeo/comms show "not connected yet" until their phases |

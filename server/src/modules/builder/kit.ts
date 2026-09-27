@@ -48,8 +48,10 @@ export async function buildKit(pool: pg.Pool, actor: Actor, projectId: string, o
     WHERE pi.project_id=$1 AND pi.selected AND a.status IN ('available','approved') ORDER BY pi.position, pi.added_at`, [projectId])).rows;   // never Do Not Use (T4)
   const status = await kitStatus(pool, projectId);
   const approvedScenes = status.deliverables.reduce((n, d) => n + d.approvedCount, 0);
-  if (approvedScenes > 0 && !o.confirmReplaceApproved) {
-    throw new OwnerError(`${approvedScenes} scene(s) are already approved. Building again replaces all scenes and they will need approval again. Press BUILD AGAIN to confirm.`, 409, 'confirm_rebuild', { approvedScenes });
+  const ownerWritten = Number((await pool.query(`SELECT count(*) FROM scenes s JOIN deliverables d ON d.id=s.deliverable_id WHERE d.project_id=$1 AND s.written_by='owner'`, [projectId])).rows[0].count);
+  if ((approvedScenes > 0 || ownerWritten > 0) && !o.confirmReplaceApproved) {
+    const parts = [approvedScenes ? `${approvedScenes} scene(s) are approved` : '', ownerWritten ? `${ownerWritten} scene(s) have your own rewritten words` : ''].filter(Boolean).join(' and ');
+    throw new OwnerError(`${parts}. Building again replaces all scenes${approvedScenes ? ' and they will need approval again' : ''}. The current version is saved first — you can bring it back from Saved versions on the Project page. Press BUILD AGAIN to confirm.`, 409, 'confirm_rebuild', { approvedScenes, ownerWritten });
   }
   const input: WriterInput = { businessName: p.business_name, industry, businessType: p.btype, story: o.story, tone: o.tone, websiteUrl: p.website_url, facts, images, websiteSecs: o.websiteSecs };
   let draft: KitDraft;
@@ -64,6 +66,8 @@ export async function buildKit(pool: pg.Pool, actor: Actor, projectId: string, o
 
   return tx(async (t) => {
     await t.query(`SELECT id FROM projects WHERE id=$1 FOR UPDATE`, [projectId]);
+    const hadScenes = (await t.query(`SELECT 1 FROM scenes s JOIN deliverables d ON d.id=s.deliverable_id WHERE d.project_id=$1 LIMIT 1`, [projectId])).rowCount;
+    if (hadScenes) await createCheckpoint(t, projectId, 'before_rebuild', 'Automatic safety copy before building the videos again', actor.label);
     const dels = (await t.query(`SELECT * FROM deliverables WHERE project_id=$1`, [projectId])).rows;
     const byKind = (k: string) => dels.find((d) => d.kind === k);
     for (const kind of ['website', 'social_a', 'social_b', 'email'] as const) {
@@ -89,7 +93,7 @@ export async function buildKit(pool: pg.Pool, actor: Actor, projectId: string, o
       }
     }
     await t.query(`UPDATE projects SET story=$2, tone=$3, settings=settings || $4::jsonb, workflow_step=GREATEST(workflow_step,6),
-      status=CASE WHEN status IN ('ready_to_start','approved') THEN 'in_progress' ELSE status END WHERE id=$1`,
+      status=CASE WHEN status IN ('ready_to_start','approved','delivered') THEN 'in_progress' ELSE status END WHERE id=$1`,
       [projectId, o.story, o.tone, JSON.stringify({ websiteLength: o.websiteSecs, platform, writtenBy: draft.writtenBy })]);
     const rec = (await t.query(`SELECT status FROM production_records WHERE project_id=$1`, [projectId])).rows[0];
     if (rec && ['approved', 'package_downloaded', 'delivered'].includes(rec.status)) await t.query(`UPDATE production_records SET status='needs_reapproval', updated_at=now() WHERE project_id=$1`, [projectId]);
@@ -110,8 +114,8 @@ export async function setSceneImage(pool: pg.Pool, actor: Actor, projectId: stri
     ref = { assetId: a.id, title: a.title };
     await pool.query(`INSERT INTO project_images (project_id, asset_id, selected, position) VALUES ($1,$2,true,999) ON CONFLICT (project_id, asset_id) DO UPDATE SET selected=true`, [projectId, a.id]);
   }
-  const { updateScene } = await import('../projects/service.js');
-  return updateScene(pool, actor, projectId, sceneId, { image_ref: ref });
+  const { updateSceneContent } = await import('../projects/service.js');
+  return updateSceneContent(pool, actor, projectId, sceneId, { image_ref: ref });
 }
 
 // ---------------------------------------------------------------------------------------------------------------
@@ -138,12 +142,16 @@ const FORMAT_FILE: Record<string, string> = { '16x9': '16x9_Landscape', '9x16': 
 
 export async function buildKitZip(pool: pg.Pool, actor: Actor, projectId: string) {
   requirePerm(actor, 'work');
-  const p = await projectRow(pool, projectId);
-  const st = await kitStatus(pool, projectId);
+  // One consistent snapshot: the approval check, the scenes packaged and the download record all see the same data,
+  // so an edit landing mid-download can never put unapproved words into a zip logged as approved.
+  return tx(async (t) => {
+  await t.query('SET TRANSACTION ISOLATION LEVEL REPEATABLE READ');
+  const p = await projectRow(t as any, projectId);
+  const st = await kitStatus(t, projectId);
   if (!st.completeVideoKitApproved) throw new OwnerError('Approve the Complete Video Kit (Step 7) before downloading. BrittVideo only packages approved work.', 409, 'not_approved');
-  const dels = (await pool.query(`SELECT * FROM deliverables WHERE project_id=$1 ORDER BY position`, [projectId])).rows;
-  const scenes = (await pool.query(`SELECT s.* FROM scenes s JOIN deliverables d ON d.id=s.deliverable_id WHERE d.project_id=$1 ORDER BY d.position, s.position`, [projectId])).rows;
-  const facts = new Map((await pool.query(`SELECT id, text, source_url FROM project_facts WHERE project_id=$1`, [projectId])).rows.map((f) => [f.id, f]));
+  const dels = (await t.query(`SELECT * FROM deliverables WHERE project_id=$1 ORDER BY position`, [projectId])).rows;
+  const scenes = (await t.query(`SELECT s.* FROM scenes s JOIN deliverables d ON d.id=s.deliverable_id WHERE d.project_id=$1 ORDER BY d.position, s.position`, [projectId])).rows;
+  const facts = new Map((await t.query(`SELECT id, text, source_url FROM project_facts WHERE project_id=$1`, [projectId])).rows.map((f) => [f.id, f]));
   const client = cleanName(p.business_name);
   const files: { name: string; data: Buffer }[] = [];
   const usedAssets = new Map<string, { title: string }>();
@@ -157,7 +165,9 @@ export async function buildKitZip(pool: pg.Pool, actor: Actor, projectId: string
     if (d.formats.length === 1) files.push({ name: `${client}_${label}_${d.duration_s}sec.txt`, data: Buffer.from(sceneText(d, FORMAT_FILE[d.formats[0]].replace('_', ' '))) });
     else for (const f of d.formats) files.push({ name: `${client}_${label}_${d.duration_s}sec_${FORMAT_FILE[f]}.txt`, data: Buffer.from(sceneText(d, FORMAT_FILE[f].replace('_', ' ') + (f === '9x16' ? '' : ' — reframe the approved scenes without changing narration'))) });
   }
-  const assets = usedAssets.size ? (await pool.query(`SELECT id, title, storage_key, mime, source_url, rights_note FROM assets WHERE id = ANY($1::uuid[])`, [[...usedAssets.keys()]])).rows : [];
+  const assets = usedAssets.size ? (await t.query(`SELECT id, title, status, storage_key, mime, source_url, rights_note FROM assets WHERE id = ANY($1::uuid[])`, [[...usedAssets.keys()]])).rows : [];
+  const blocked = assets.filter((x: any) => !['available', 'approved'].includes(x.status));
+  if (blocked.length) throw new OwnerError(`${blocked.map((x: any) => `"${x.title}"`).join(', ')} is marked Do Not Use or deleted. Choose a different picture for those scenes and approve again before downloading.`, 409, 'image_not_usable');
   const sources: string[] = [];
   let n = 1;
   for (const a of assets) {
@@ -174,13 +184,14 @@ export async function buildKitZip(pool: pg.Pool, actor: Actor, projectId: string
     `\n\nSTATUS: COMPLETE VIDEO KIT APPROVED\nEvery narration line lists its source. Confirm the client's permission for all images before final production.\n`;
   files.unshift({ name: '00_READ_ME.txt', data: Buffer.from(manifest) });
   const fileName = `${client}_BrittVideo_Complete_Kit.zip`;
-  await tx(async (t) => {
+  {
     await t.query(`INSERT INTO download_events (project_id, kind, kit_hash, file_name, by_label) VALUES ($1,'complete_kit',$2,$3,$4)`, [projectId, st.compositeHash, fileName, actor.label]);
     await t.query(`UPDATE production_records SET status=CASE WHEN status='delivered' THEN status ELSE 'package_downloaded' END, package_downloaded_at=now(), updated_at=now() WHERE project_id=$1`, [projectId]);
     await t.query(`UPDATE projects SET workflow_step=GREATEST(workflow_step,8) WHERE id=$1`, [projectId]);
     await audit(t, actor, 'project.kit_downloaded', { type: 'project', id: projectId }, `Complete Video Kit downloaded (${fileName})`);
-  }, pool);
+  }
   return { fileName, data: zip(files) };
+  }, pool);
 }
 
 /** RECORD DELIVERY — only after the approved kit was actually downloaded; history is append-only (N11, N13). */
@@ -193,6 +204,8 @@ export async function recordDelivery(pool: pg.Pool, actor: Actor, projectId: str
     if (!st.completeVideoKitApproved) throw new OwnerError('The kit is not approved in its current form, so delivery cannot be recorded.', 409, 'not_approved');
     const dl = (await t.query(`SELECT 1 FROM download_events WHERE project_id=$1 AND kit_hash=$2 AND kind='complete_kit'`, [projectId, st.compositeHash])).rowCount;
     if (!dl) throw new OwnerError('Download the approved Complete Video Kit first. BrittVideo will not record a delivery before that happens.', 409, 'not_downloaded');
+    const recent = (await t.query(`SELECT 1 FROM delivery_records WHERE project_id=$1 AND kit_hash=$2 AND method=$3 AND delivered_at > now() - interval '2 minutes'`, [projectId, st.compositeHash, input.method.trim()])).rowCount;
+    if (recent) throw new OwnerError('This delivery was just recorded — it is already in the Delivery history.', 409, 'duplicate_delivery');
     await t.query(`INSERT INTO delivery_records (project_id, kit_hash, method, reference, recorded_by_label) VALUES ($1,$2,$3,$4,$5)`, [projectId, st.compositeHash, input.method.trim(), input.reference?.trim() || null, actor.label]);
     await t.query(`UPDATE production_records SET status='delivered', delivered_at=now(), delivery_method=$2, delivery_reference=$3, updated_at=now() WHERE project_id=$1`, [projectId, input.method.trim(), input.reference?.trim() || null]);
     await t.query(`UPDATE projects SET status='delivered' WHERE id=$1`, [projectId]);
