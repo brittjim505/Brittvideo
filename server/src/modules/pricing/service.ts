@@ -64,7 +64,7 @@ export function publicPackages(pb: Awaited<ReturnType<typeof currentPriceBook>>)
   const order: PackageCode[] = ['standard', 'premier'];
   return order.filter((c) => pb.packages[c]).map((code) => {
     const p = pb.packages[code];
-    const lines = p.lines.map((l) => ({ label: pb.items[l].label, billing: pb.items[l].billing, amountCents: pb.items[l].amount_cents }));
+    const lines = p.lines.map((l) => ({ code: l, label: pb.items[l].label, billing: pb.items[l].billing, amountCents: pb.items[l].amount_cents }));
     const oneTime = lines.filter((l) => l.billing === 'one_time').reduce((s, l) => s + (l.amountCents ?? 0), 0);
     const monthly = lines.filter((l) => l.billing === 'monthly').reduce((s, l) => s + (l.amountCents ?? 0), 0);
     const priceText = monthly ? `${money(oneTime)} + ${money(monthly)}/month` : `${money(oneTime)} one-time`;

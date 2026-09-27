@@ -25,6 +25,8 @@ import { createBackup } from './modules/backup/service.js';
 import { importPrototypeExport } from './modules/migration/importer.js';
 import { auditTrail } from './modules/audit/service.js';
 import { objectPath } from './integrations/storage.js';
+import { TERMS_VERSION, termsText } from './modules/sales/terms.js';
+import { money } from './lib/util.js';
 
 declare module 'fastify' {
   interface FastifyRequest { actor: Actor | null; sessionId: string | null; sessionLocked: boolean }
@@ -214,6 +216,14 @@ export async function buildApp(pool: pg.Pool, opts: { logger?: boolean } = {}): 
   // =============================================================================================================
   const demoCtx = (req: FastifyRequest, count = false) => demo.resolveDemo(pool, params(req).kind, params(req).token, count);
   app.get('/api/public/demo/:kind/:token', async (req) => demo.publicDemoView(pool, await demoCtx(req, true)));
+  // The exact agreement text is shown before the prospect accepts it (M10).
+  app.get('/api/public/demo/:kind/:token/terms', async (req) => {
+    await demoCtx(req);
+    const pkg = String((req.query as any).package) === 'premier' ? 'premier' : 'standard';
+    const pub = pricing.publicPackages(await pricing.currentPriceBook(pool)).find((p) => p.code === pkg)!;
+    const priceText = pub.monthlyCents ? `${money(pub.oneTimeCents)} one-time + ${money(pub.monthlyCents)} per month` : `${money(pub.oneTimeCents)} one-time`;
+    return { package: pkg, version: TERMS_VERSION, text: termsText(pkg, priceText) };
+  });
   app.post('/api/public/demo/:kind/:token/signup', async (req) => {
     const ctx = await demoCtx(req);
     if (!ctx.allowSignup) throw new OwnerError('Signup is not available from this link. Please contact BrittVideo.', 403, 'signup_disabled');

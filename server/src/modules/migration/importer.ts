@@ -140,7 +140,7 @@ export async function importPrototypeExport(pool: pg.Pool, actor: Actor, fileTex
       const cp = checkpoints[pid];
       const cpNewer = cp?.checkpointAt && Date.parse(cp.checkpointAt) > (Date.parse(saved.updated ?? 0) || 0) + 1000;
       const p = cpNewer ? { ...saved, ...cp } : saved;
-      if (cpNewer) S.notes.push(`"${saved.clientName ?? saved.name}": newer automatically-protected work from ${cp.checkpointAt} was used; the last named save is kept as a checkpoint.`);
+      if (cpNewer) S.notes.push(`"${saved.clientName ?? saved.name}": newer automatically-protected work from ${new Date(cp.checkpointAt).toUTCString().replace(' GMT', ' UTC')} was used; the last named save is kept as a checkpoint.`);
       const name = (p.clientName || p.name || 'Imported project').trim();
       const owner = await findOwner(name, p.url ?? '', p.market);
       const mm = mapMarket(p.market);
