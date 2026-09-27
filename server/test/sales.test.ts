@@ -1,7 +1,7 @@
 import { describe, it, expect, beforeAll, afterAll } from 'vitest';
 import type { FastifyInstance } from 'fastify';
 import { db, closeDb } from '../src/db/pool.js';
-import { resetDb, seedUsers, app as mkApp, client, uid } from './helpers.js';
+import { resetDb, seedUsers, app as mkApp, client, uid, publicSignup } from './helpers.js';
 
 let a: FastifyInstance;
 beforeAll(async () => { await resetDb(); await seedUsers(); a = await mkApp(); });
@@ -64,7 +64,7 @@ describe('in-person iPad demo → sale → client + order + project (W20, W23, D
     const token = demoUrl.split('/').pop();
     const saleKey = uid();
     const before = { clients: await count('clients'), orders: await count('orders'), projects: await count('projects') };
-    const r = await client(a).post(`/api/public/demo/s/${token}/signup`, {
+    const r = await publicSignup(a, 's', token!, {
       saleKey, package: 'premier', contactName: 'Pat Lee', email: 'pat@sunrise.example', phone: '505-555-0100', agreementAccepted: true, agreementName: 'Pat Lee' });
     expect(r.status).toBe(200);
     orderId = r.json.orderId;
@@ -85,11 +85,11 @@ describe('in-person iPad demo → sale → client + order + project (W20, W23, D
     expect(m.status).toBe('pending_start');
     expect(m.monthly_price_cents).toBe(14900);
     // Retrying the exact same submission (double-tap, network retry) changes nothing.
-    const again = await client(a).post(`/api/public/demo/s/${token}/signup`, {
+    const again = await publicSignup(a, 's', token!, {
       saleKey, package: 'premier', contactName: 'Pat Lee', email: 'pat@sunrise.example', phone: '505-555-0100', agreementAccepted: true, agreementName: 'Pat Lee' });
     expect(again.json.orderId).toBe(orderId);
     // A fresh form on the same demo returns the same order — one sale per demo.
-    const third = await client(a).post(`/api/public/demo/s/${token}/signup`, {
+    const third = await publicSignup(a, 's', token!, {
       saleKey: uid(), package: 'standard', contactName: 'Pat Lee', email: 'pat@sunrise.example', agreementAccepted: true, agreementName: 'Pat Lee' });
     expect(third.json.orderId).toBe(orderId);
     expect(await count('orders')).toBe(before.orders + 1);
@@ -102,7 +102,7 @@ describe('in-person iPad demo → sale → client + order + project (W20, W23, D
     const token = s.json.url.split('/').pop();
     const before = await count('orders');
     const body = { package: 'standard', agreementAccepted: true, agreementName: 'Dr P', email: 'p@pd.example' };
-    const rs = await Promise.all(Array.from({ length: 6 }, () => client(a).post(`/api/public/demo/s/${token}/signup`, { ...body, saleKey: uid() })));
+    const rs = await Promise.all(Array.from({ length: 6 }, () => publicSignup(a, 's', token!, { ...body, saleKey: uid() })));
     const ok = rs.filter((r) => r.status === 200);
     expect(ok.length).toBeGreaterThan(0);
     expect(new Set(ok.map((r) => r.json.orderId)).size).toBe(1);

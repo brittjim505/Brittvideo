@@ -37,7 +37,7 @@ export function ProjectDetail() {
   if (d.error) return <LoadError error={d.error} retry={d.reload} />;
   const { project: p, status: st, scenes, production, invalidations } = d.data;
   const reload = () => { d.reload(); cps.reload(); };
-  const approve = (type: string, sid?: string) => a.run(async () => { await post(`/api/projects/${id}/approve`, { type, id: sid }); reload(); });
+  const approve = (type: string, sid: string | undefined, expectedHash: string) => a.run(async () => { await post(`/api/projects/${id}/approve`, { type, id: sid, expectedHash }); reload(); });
   const totalScenes = st.deliverables.reduce((s: number, x: any) => s + x.sceneCount, 0);
   const approvedScenes = st.deliverables.reduce((s: number, x: any) => s + x.approvedCount, 0);
   return <>
@@ -50,7 +50,7 @@ export function ProjectDetail() {
     <section className="card">
       <div className="row between"><h2 style={{ margin: 0 }}>Approvals</h2>
         {st.completeVideoKitApproved ? <span className="badge ok" style={{ fontSize: 15 }}>✓ COMPLETE VIDEO KIT APPROVED</span> :
-          <button className={'btn ' + (st.readyForFinalApproval ? 'next' : '')} disabled={!st.readyForFinalApproval || a.busy} onClick={() => approve('kit')}>APPROVE COMPLETE VIDEO KIT</button>}</div>
+          <button className={'btn ' + (st.readyForFinalApproval ? 'next' : '')} disabled={!st.readyForFinalApproval || a.busy} onClick={() => approve('kit', undefined, st.compositeHash)}>APPROVE COMPLETE VIDEO KIT</button>}</div>
       {totalScenes > 0 && <div style={{ margin: '12px 0' }}><div className="progress" aria-label="Scenes approved"><span style={{ width: `${Math.round(100 * approvedScenes / totalScenes)}%` }} /></div>
         <p className="small muted" style={{ marginTop: 4 }}>{approvedScenes} of {totalScenes} scenes approved</p></div>}
       <div className="scroll-x"><table className="t"><thead><tr><th>Video</th><th>Length</th><th>Formats</th><th>Approved</th><th></th></tr></thead><tbody>
@@ -73,7 +73,7 @@ export function ProjectDetail() {
           <div><b className="small">Narration:</b> “{s.narration}”</div>
           {ss.wasApprovedEarlier && <div className="small" style={{ color: 'var(--amber)', fontWeight: 700 }}>Changed since it was approved — approve again.</div>}
           <div className="actions" style={{ marginTop: 8 }}>
-            {ss.approved ? <span className="badge ok">✓ Approved</span> : <button className="btn small next" disabled={a.busy} onClick={() => approve('scene', s.id)}>APPROVE SCENE</button>}
+            {ss.approved ? <span className="badge ok">✓ Approved</span> : <button className="btn small next" disabled={a.busy} onClick={() => approve('scene', s.id, s.content_hash)}>APPROVE SCENE</button>}
             <button className="btn small" onClick={() => setEdit(s)}>REWRITE SCENE</button>
           </div>
         </div>); })}</div>
@@ -115,7 +115,7 @@ function DeliverableScript({ projectId, d, approved, onChange }: { projectId: st
     <Field label="Script" help="Editing an approved script removes its approval until you approve it again."><textarea style={{ minHeight: 220, fontFamily: 'ui-monospace, Menlo, monospace', fontSize: 14 }} value={text} onChange={(e) => setText(e.target.value)} /></Field>
     <div className="actions">
       <button className="btn" disabled={a.busy || text === d.script_text} onClick={() => a.run(async () => { await put(`/api/projects/${projectId}/deliverables/${d.id}/script`, { text }); onChange(); }, 'Script saved.')}>SAVE SCRIPT</button>
-      {approved ? <span className="badge ok">✓ Script approved</span> : <button className="btn next" disabled={a.busy || !text.trim() || text !== d.script_text} onClick={() => a.run(async () => { await post(`/api/projects/${projectId}/approve`, { type: 'script', id: d.id }); onChange(); })}>APPROVE SCRIPT</button>}
+      {approved ? <span className="badge ok">✓ Script approved</span> : <button className="btn next" disabled={a.busy || !text.trim() || text !== d.script_text} onClick={() => a.run(async () => { await post(`/api/projects/${projectId}/approve`, { type: 'script', id: d.id, expectedHash: d.script_hash }); onChange(); })}>APPROVE SCRIPT</button>}
     </div>
     <Msg error={a.error} ok={a.ok} />
   </div>;

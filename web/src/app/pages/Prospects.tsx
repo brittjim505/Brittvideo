@@ -30,14 +30,15 @@ export function Prospects() {
   const [params, setParams] = useSearchParams();
   const [f, setF] = useState<BizForm>(emptyBiz);
   const [restored, setRestored] = useState(false);
-  const save = useAutosave('prospect-form', f, { enabled: restored });
+  const [rev, setRev] = useState<number | null>(null);
+  const save = useAutosave('prospect-form', f, { enabled: restored, initialRevision: rev });
   const add = useAction();
   const act = useAction();
   const list = useLoad(() => get('/api/prospects'));
   const [editing, setEditing] = useState<any>(null);
   const [linkFor, setLinkFor] = useState<any>(null);
   const nav = useNavigate();
-  useEffect(() => { document.title = 'Prospects — BrittVideo'; loadDraft<BizForm>('prospect-form').then((d) => { if (d) setF({ ...emptyBiz, ...d }); setRestored(true); }); }, []);
+  useEffect(() => { document.title = 'Prospects — BrittVideo'; loadDraft<BizForm>('prospect-form').then((d) => { if (d.value) setF({ ...emptyBiz, ...d.value }); setRev(d.revision); setRestored(true); }); }, []);
   const ready = f.businessName.trim() && (f.industry !== 'other' || f.businessType.trim());
   const open = params.get('open');
   useEffect(() => { if (open && list.data) { const p = list.data.find((x: any) => x.id === open); if (p) setEditing(p); } }, [open, list.data]);
@@ -52,7 +53,7 @@ export function Prospects() {
           const r = await add.run(() => post('/api/prospects', f));
           if (r) { add.setOk(r.created ? `${r.prospect.business_name} was added.` : `${r.prospect.business_name} is already in your list — no duplicate was added.`); setF(emptyBiz); await save.clear(); list.reload(); setParams({}); }
         }}>ADD PROSPECT</button>
-        <span className={'savestate ' + (['retrying', 'offline'].includes(save.state) ? 'warn' : '')}>{saveLabel(save.state)}</span>
+        <span className={'savestate ' + (['retrying', 'offline', 'conflict'].includes(save.state) ? 'warn' : '')}>{saveLabel(save.state)}</span>
       </div>
       <Msg error={add.error} ok={add.ok} />
     </section>

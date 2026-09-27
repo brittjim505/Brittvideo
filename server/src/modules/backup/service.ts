@@ -55,7 +55,8 @@ export async function createBackup(pool: pg.Pool, kind: 'scheduled' | 'manual' |
       [rec.id, path.basename(file), body.length, fileSha, verified ? 'passed' : 'failed',
         verified ? 'Backup created and checked.' : 'Backup file could not be verified.']);
     if (!verified) throw new Error('Backup verification failed');
-    return { file, bytes: body.length, sha256: fileSha, header };
+    const media = backupMedia();
+    return { file, bytes: body.length, sha256: fileSha, header, media };
   } catch (e: any) {
     if (rec) await pool.query(`UPDATE backups SET status='failed', finished_at=now(), owner_message=$2 WHERE id=$1`,
       [rec.id, 'The backup could not be completed. BrittVideo will try again and alert support if it keeps failing.']);
@@ -98,8 +99,11 @@ export async function restoreBackup(file: string, target: { pool: pg.Pool; url: 
     keep = await protectedState(target.pool);
     if (!opts.skipPreRestoreBackup) preRestore = (await createBackup(target.pool, 'pre_restore', target.url)).file;
   }
-  await target.pool.query('DROP SCHEMA public CASCADE; CREATE SCHEMA public;');
-  await run(bin('pg_restore'), ['--no-owner', '--no-privileges', '--exit-on-error', '-d', target.url], dump);
+  // Atomic restore: the drop and the full reload run in ONE transaction. If anything fails, the target database is
+  // left exactly as it was (never empty or half-restored).
+  const script = await run(bin('pg_restore'), ['--no-owner', '--no-privileges', '-f', '-'], dump);
+  const wrapped = Buffer.concat([Buffer.from('DROP SCHEMA public CASCADE;\nCREATE SCHEMA public;\n'), script]);
+  await run(bin('psql'), ['-X', '-q', '-v', 'ON_ERROR_STOP=1', '--single-transaction', '-d', target.url, '-f', '-'], wrapped);
   let reapplied = 0;
   for (const u of keep.unsub) {
     const r = await target.pool.query(
@@ -111,7 +115,46 @@ export async function restoreBackup(file: string, target: { pool: pg.Pool; url: 
     const r = await target.pool.query(`UPDATE assets SET status='permanently_deleted', storage_key=NULL WHERE id=$1 AND status<>'permanently_deleted'`, [t.id]);
     reapplied += r.rowCount ?? 0;
   }
-  return { header, preRestoreBackup: preRestore, protectedStateReapplied: reapplied };
+  const mediaRestored = restoreMedia();
+  return { header, preRestoreBackup: preRestore, protectedStateReapplied: reapplied, mediaRestored };
+}
+
+/**
+ * Media (images and, later, videos) is backed up as an encrypted, content-addressed mirror next to the database
+ * backups: each file is copied once, so nightly runs are cheap. Restoring puts back any missing file.
+ */
+export function backupMedia(): { copied: number; total: number } {
+  const src = path.join(config().STORAGE_DIR, 'media');
+  const dst = path.join(config().BACKUP_DIR, 'media');
+  if (!fs.existsSync(src)) return { copied: 0, total: 0 };
+  let copied = 0, total = 0;
+  for (const sub of fs.readdirSync(src)) for (const f of fs.readdirSync(path.join(src, sub))) {
+    total++;
+    const out = path.join(dst, sub, f + '.enc');
+    if (fs.existsSync(out)) continue;
+    const iv = crypto.randomBytes(12); const c = crypto.createCipheriv('aes-256-gcm', keyBuf(), iv);
+    const enc = Buffer.concat([c.update(fs.readFileSync(path.join(src, sub, f))), c.final()]);
+    fs.mkdirSync(path.dirname(out), { recursive: true });
+    fs.writeFileSync(out, Buffer.concat([iv, c.getAuthTag(), enc]), { mode: 0o600 });
+    copied++;
+  }
+  return { copied, total };
+}
+
+export function restoreMedia(): number {
+  const src = path.join(config().BACKUP_DIR, 'media'); const dst = path.join(config().STORAGE_DIR, 'media');
+  if (!fs.existsSync(src)) return 0;
+  let restored = 0;
+  for (const sub of fs.readdirSync(src)) for (const f of fs.readdirSync(path.join(src, sub))) {
+    const out = path.join(dst, sub, f.replace(/\.enc$/, ''));
+    if (fs.existsSync(out)) continue;
+    const buf = fs.readFileSync(path.join(src, sub, f));
+    const d = crypto.createDecipheriv('aes-256-gcm', keyBuf(), buf.subarray(0, 12)); d.setAuthTag(buf.subarray(12, 28));
+    fs.mkdirSync(path.dirname(out), { recursive: true });
+    fs.writeFileSync(out, Buffer.concat([d.update(buf.subarray(28)), d.final()]));
+    restored++;
+  }
+  return restored;
 }
 
 export function listBackupFiles() {

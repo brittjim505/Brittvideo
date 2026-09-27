@@ -29,6 +29,14 @@ export function cleanBusiness(b: BusinessInput) {
   };
 }
 
+/** Merge a partial update over the stored record so fields that were not sent are kept (never erased). */
+function mergeBusiness(row: any, input: Partial<BusinessInput>): BusinessInput {
+  const pick = <K extends keyof BusinessInput>(k: K, col: string) => (input[k] !== undefined ? input[k] : row[col]) as any;
+  return { businessName: pick('businessName', 'business_name'), websiteUrl: pick('websiteUrl', 'website_url'), industry: pick('industry', 'industry'),
+    businessType: pick('businessType', 'business_type'), contactName: pick('contactName', 'contact_name'), email: pick('email', 'email'),
+    phone: pick('phone', 'phone'), privateNotes: pick('privateNotes', 'private_notes') };
+}
+
 export const industryText = (industry: Industry, businessType?: string | null) =>
   industry === 'other' ? `OTHER — ${businessType ?? 'business type not set'}` : INDUSTRY_LABEL[industry];
 
@@ -70,12 +78,12 @@ export async function getProspect(q: Queryable, actor: Actor, id: string) {
   return p;
 }
 
-export async function updateProspect(pool: pg.Pool, actor: Actor, id: string, input: BusinessInput) {
+export async function updateProspect(pool: pg.Pool, actor: Actor, id: string, input: Partial<BusinessInput>) {
   requirePerm(actor, 'work');
-  const b = cleanBusiness(input);
   return tx(async (t) => {
     const before = (await t.query(`SELECT * FROM prospects WHERE id=$1 FOR UPDATE`, [id])).rows[0];
     if (!before) throw notFound('prospect');
+    const b = cleanBusiness(mergeBusiness(before, input));
     const dup = await findDuplicateProspect(t, b.businessName, b.websiteNorm);
     if (dup && dup.id !== id) throw new OwnerError(`Another prospect already has that name and website (${dup.business_name}).`, 409, 'duplicate');
     const after = (await t.query(`UPDATE prospects SET business_name=$2, website_url=$3, website_norm=$4, industry=$5, business_type=$6,
@@ -153,12 +161,12 @@ export async function getClient(q: Queryable, actor: Actor, id: string) {
   return { client: c, orders, projects, premier, marketingHistory };
 }
 
-export async function updateClient(pool: pg.Pool, actor: Actor, id: string, input: BusinessInput) {
+export async function updateClient(pool: pg.Pool, actor: Actor, id: string, input: Partial<BusinessInput>) {
   requirePerm(actor, 'work');
-  const b = cleanBusiness(input);
   return tx(async (t) => {
     const before = (await t.query(`SELECT * FROM clients WHERE id=$1 FOR UPDATE`, [id])).rows[0];
     if (!before) throw notFound('client');
+    const b = cleanBusiness(mergeBusiness(before, input));
     const dup = await findDuplicateClient(t, b.businessName, b.websiteNorm);
     if (dup && dup.id !== id) throw new OwnerError(`Another client already has that name and website (${dup.business_name}).`, 409, 'duplicate');
     const after = (await t.query(`UPDATE clients SET business_name=$2, website_url=$3, website_norm=$4, industry=$5, business_type=$6,

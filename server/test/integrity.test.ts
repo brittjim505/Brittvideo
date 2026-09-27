@@ -35,11 +35,11 @@ describe('approval integrity (K8–K10, W6, W7, Y5, Y6)', () => {
     await addScenes(projectId);
     const p = await c.get(`/api/projects/${projectId}`);
     const scenes = p.json.scenes;
-    for (const s of scenes.slice(0, -1)) await c.post(`/api/projects/${projectId}/approve`, { type: 'scene', id: s.id });
+    for (const s of scenes.slice(0, -1)) await c.post(`/api/projects/${projectId}/approve`, { type: 'scene', id: s.id, expectedHash: s.content_hash });
     const st = (await c.get(`/api/projects/${projectId}`)).json.status;
     expect(st.allComponentsApproved).toBe(false);
     expect(st.deliverables.find((d: any) => d.kind === 'email').approvedCount).toBe(2);
-    const kit = await c.post(`/api/projects/${projectId}/approve`, { type: 'kit' });
+    const kit = await c.post(`/api/projects/${projectId}/approve`, { type: 'kit', expectedHash: st.compositeHash });
     expect(kit.status).toBe(409);
     expect(kit.json.error.message).toMatch(/Email Video \(2\/3\)/);
     expect(st.completeVideoKitApproved).toBe(false);
@@ -48,8 +48,9 @@ describe('approval integrity (K8–K10, W6, W7, Y5, Y6)', () => {
   it('approving the last scene enables final approval; the kit gate is calculated, not stored', async () => {
     const c = await jim();
     const last = (await c.get(`/api/projects/${projectId}`)).json.scenes.at(-1);
-    await c.post(`/api/projects/${projectId}/approve`, { type: 'scene', id: last.id });
-    const r = await c.post(`/api/projects/${projectId}/approve`, { type: 'kit' });
+    await c.post(`/api/projects/${projectId}/approve`, { type: 'scene', id: last.id, expectedHash: last.content_hash });
+    const st = (await c.get(`/api/projects/${projectId}`)).json.status;
+    const r = await c.post(`/api/projects/${projectId}/approve`, { type: 'kit', expectedHash: st.compositeHash });
     expect(r.status).toBe(200);
     expect(r.json.completeVideoKitApproved).toBe(true);
     expect((await db().query(`SELECT status FROM production_records WHERE project_id=$1`, [projectId])).rows[0].status).toBe('approved');

@@ -13,7 +13,8 @@ export async function saveDraft(q: Queryable, actor: Actor, key: string, payload
   const json = JSON.stringify(payload ?? {});
   if (json.length > 200_000) throw new OwnerError('This draft is too large to autosave. Please save it as a project.');
   const cur = (await q.query(`SELECT revision FROM drafts WHERE user_id=$1 AND draft_key=$2`, [actor.userId, key])).rows[0];
-  if (cur && baseRevision !== null && baseRevision < cur.revision) {
+  // A write that doesn't know about the stored version (another tab/device saved first) must not overwrite it.
+  if (cur && (baseRevision === null || baseRevision < cur.revision)) {
     const latest = (await q.query(`SELECT payload, revision, updated_at FROM drafts WHERE user_id=$1 AND draft_key=$2`, [actor.userId, key])).rows[0];
     return { conflict: true, ...latest };
   }

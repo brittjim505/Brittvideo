@@ -90,7 +90,7 @@ export async function kitStatus(q: Queryable, projectId: string) {
   };
 }
 
-export async function approve(pool: pg.Pool, actor: Actor, projectId: string, subject: { type: 'scene' | 'script' | 'kit'; id: string }) {
+export async function approve(pool: pg.Pool, actor: Actor, projectId: string, subject: { type: 'scene' | 'script' | 'kit'; id: string; expectedHash?: string | null }) {
   requirePerm(actor, 'work', 'approve content');
   return tx(async (t) => {
     await t.query(`SELECT id FROM projects WHERE id=$1 FOR UPDATE`, [projectId]);
@@ -110,6 +110,9 @@ export async function approve(pool: pg.Pool, actor: Actor, projectId: string, su
       }
       hash = st.compositeHash;
     }
+    // Approve exactly what the owner was looking at: if it changed since (another tab, a restore), refuse (Y5).
+    if (!subject.expectedHash) throw new OwnerError('Please refresh the page, then approve again.', 400, 'expected_hash');
+    if (subject.expectedHash !== hash) throw new OwnerError('This changed since you opened it. BrittVideo is showing you the latest version — please review it, then approve.', 409, 'content_changed');
     await t.query(`INSERT INTO approvals (project_id, subject_type, subject_id, content_hash, decision, decided_by, decided_by_label) VALUES ($1,$2,$3,$4,'approved',$5,$6)`,
       [projectId, subject.type, subject.id, hash, actor.userId, actor.label]);
     if (subject.type === 'kit') {
@@ -225,10 +228,25 @@ export async function restoreCheckpoint(pool: pg.Pool, actor: Actor, projectId: 
         await t.query(`DELETE FROM scenes WHERE id=$1`, [extra.id]);
       }
     }
+    await syncProductionState(t, projectId);
     await audit(t, actor, 'project.checkpoint_restored', { type: 'project', id: projectId }, `Restored project to checkpoint from ${new Date(cp.created_at).toISOString()} (${cp.reason})`);
     // Approvals are never copied from the checkpoint: validity is recomputed from content hashes (Q6).
     return kitStatus(t, projectId);
   }, pool);
+}
+
+/** Keep the production record and project status consistent with the calculated kit gate (no false green). */
+async function syncProductionState(t: Queryable, projectId: string) {
+  const st = await kitStatus(t, projectId);
+  const rec = (await t.query(`SELECT status FROM production_records WHERE project_id=$1`, [projectId])).rows[0];
+  if (!rec) return;
+  if (!st.completeVideoKitApproved && ['approved', 'package_downloaded', 'delivered'].includes(rec.status)) {
+    await t.query(`UPDATE production_records SET status='needs_reapproval', updated_at=now() WHERE project_id=$1`, [projectId]);
+    await t.query(`UPDATE projects SET status='in_progress' WHERE id=$1 AND status IN ('approved','ready_for_delivery')`, [projectId]);
+  } else if (st.completeVideoKitApproved && rec.status === 'needs_reapproval') {
+    await t.query(`UPDATE production_records SET status='approved', updated_at=now() WHERE project_id=$1`, [projectId]);
+    await t.query(`UPDATE projects SET status='approved' WHERE id=$1 AND status='in_progress'`, [projectId]);
+  }
 }
 
 // ---------------------------------------------------------------------------------------------------------------

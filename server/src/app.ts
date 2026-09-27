@@ -26,7 +26,7 @@ import { importPrototypeExport } from './modules/migration/importer.js';
 import { auditTrail } from './modules/audit/service.js';
 import { objectPath } from './integrations/storage.js';
 import { TERMS_VERSION, termsText } from './modules/sales/terms.js';
-import { money } from './lib/util.js';
+import { money, sha256 } from './lib/util.js';
 
 declare module 'fastify' {
   interface FastifyRequest { actor: Actor | null; sessionId: string | null; sessionLocked: boolean }
@@ -105,13 +105,11 @@ export async function buildApp(pool: pg.Pool, opts: { logger?: boolean } = {}): 
     const b = body(req);
     const client = await pool.connect();
     try {
-      await client.query('BEGIN');
-      await client.query('LOCK TABLE users IN EXCLUSIVE MODE');
+      await client.query(`SELECT pg_advisory_lock(815002)`);
       const n = (await client.query(`SELECT count(*)::int n FROM users`)).rows[0].n;
-      await client.query('COMMIT');
       if (n > 0) throw new OwnerError('BrittVideo is already set up. Please sign in.', 409, 'already_setup');
-    } finally { client.release(); }
-    await auth.createUser(pool, null, { email: b.email, displayName: b.displayName, role: 'super_user', password: b.password });
+      await auth.createUser(pool, null, { email: b.email, displayName: b.displayName, role: 'super_user', password: b.password });
+    } finally { await client.query(`SELECT pg_advisory_unlock(815002)`).catch(() => {}); client.release(); }
     const s = await auth.login(pool, b.email, b.password, meta(req));
     reply.setCookie(auth.SESSION_COOKIE, s.token, cookieOpts());
     return { user: s.user };
@@ -135,7 +133,15 @@ export async function buildApp(pool: pg.Pool, opts: { logger?: boolean } = {}): 
   });
   app.post('/api/auth/unlock', async (req) => {
     if (!req.actor || !req.sessionId) throw notSignedIn();
-    if (!(await auth.confirmPassword(pool, req.actor.userId!, body(req).password))) throw new OwnerError('That password is not correct.', 401, 'bad_credentials');
+    const u = (await pool.query(`SELECT email FROM users WHERE id=$1`, [req.actor.userId])).rows[0];
+    const ok = await auth.confirmPassword(pool, req.actor.userId!, body(req).password);
+    await pool.query(`INSERT INTO login_attempts (email, ip, success) VALUES ($1,$2,$3)`, [u.email.toLowerCase(), req.ip, ok]);
+    if (!ok) {
+      const fails = (await pool.query(`SELECT count(*)::int n FROM login_attempts WHERE lower(email)=$1 AND success=false AND at > now() - interval '15 minutes'`, [u.email.toLowerCase()])).rows[0].n;
+      // Too many wrong guesses on a locked (demo) device: end this session entirely; a full sign-in is needed.
+      if (fails >= 5) { await pool.query(`UPDATE sessions SET revoked_at=now() WHERE id=$1`, [req.sessionId]); throw new OwnerError('Too many wrong passwords. For your security you have been signed out — please sign in again.', 401, 'not_signed_in'); }
+      throw new OwnerError('That password is not correct.', 401, 'bad_credentials');
+    }
     await pool.query(`UPDATE sessions SET locked_at=NULL WHERE id=$1`, [req.sessionId]);
     await pool.query(`UPDATE demo_sessions SET ended_at=coalesce(ended_at, now()) WHERE started_by=$1 AND channel='ipad_in_person' AND ended_at IS NULL`, [req.actor.userId]);
     return { ok: true };
@@ -222,7 +228,8 @@ export async function buildApp(pool: pg.Pool, opts: { logger?: boolean } = {}): 
     const pkg = String((req.query as any).package) === 'premier' ? 'premier' : 'standard';
     const pub = pricing.publicPackages(await pricing.currentPriceBook(pool)).find((p) => p.code === pkg)!;
     const priceText = pub.monthlyCents ? `${money(pub.oneTimeCents)} one-time + ${money(pub.monthlyCents)} per month` : `${money(pub.oneTimeCents)} one-time`;
-    return { package: pkg, version: TERMS_VERSION, text: termsText(pkg, priceText) };
+    const text = termsText(pkg, priceText);
+    return { package: pkg, version: TERMS_VERSION, text, sha256: sha256(text) };
   });
   app.post('/api/public/demo/:kind/:token/signup', async (req) => {
     const ctx = await demoCtx(req);
@@ -240,7 +247,7 @@ export async function buildApp(pool: pg.Pool, opts: { logger?: boolean } = {}): 
       saleKey: String(b.saleKey ?? ''), channel: ctx.channel as any, demoSessionId: sessionId, prospectId: ctx.prospectId,
       business: { businessName: ctx.businessName, websiteUrl: ctx.websiteUrl, industry: ctx.industry, businessType: ctx.businessType,
         contactName: b.contactName, email: b.email, phone: b.phone },
-      package: b.package, agreement: { accepted: !!b.agreementAccepted, name: b.agreementName, email: b.email }, meta: meta(req),
+      package: b.package, agreement: { accepted: !!b.agreementAccepted, name: b.agreementName, email: b.email, shownTermsSha256: b.termsSha256 }, meta: meta(req),
     });
     return publicOrder(r.orderId);
   });
@@ -271,7 +278,7 @@ export async function buildApp(pool: pg.Pool, opts: { logger?: boolean } = {}): 
   // =============================================================================================================
   app.get('/api/projects', async (req) => projects.listProjects(pool, actor(req), req.query as any));
   app.get('/api/projects/:id', async (req) => projects.getProject(pool, actor(req), params(req).id));
-  app.post('/api/projects/:id/approve', async (req) => { const b = body(req); return projects.approve(pool, actor(req), params(req).id, { type: b.type, id: b.type === 'kit' ? params(req).id : b.id }); });
+  app.post('/api/projects/:id/approve', async (req) => { const b = body(req); return projects.approve(pool, actor(req), params(req).id, { type: b.type, id: b.type === 'kit' ? params(req).id : b.id, expectedHash: b.expectedHash }); });
   app.patch('/api/projects/:id/scenes/:sceneId', async (req) => projects.updateScene(pool, actor(req), params(req).id, params(req).sceneId, body(req)));
   app.put('/api/projects/:id/deliverables/:did/script', async (req) => projects.updateScript(pool, actor(req), params(req).id, params(req).did, String(body(req).text ?? '')));
   app.get('/api/projects/:id/checkpoints', async (req) => projects.listCheckpoints(pool, actor(req), params(req).id));
@@ -289,11 +296,11 @@ export async function buildApp(pool: pg.Pool, opts: { logger?: boolean } = {}): 
   app.get('/api/health', async (req) => { actor(req); const c = await runHealthChecks(pool); return { summary: summarise(c), checks: c }; });
   app.get('/api/recovery-events', async (req) => { actor(req); return (await pool.query(`SELECT id, at, area, what_happened, outcome, resolved_at FROM recovery_events ORDER BY at DESC LIMIT 50`)).rows; });
   app.post('/api/support/report', async (req) => {
-    // GET SUPPORT works even while locked or for any role — the owner must always be able to ask for help (Q14).
-    if (!req.actor) throw notSignedIn();
-    return buildSupportReport(pool, { actor: req.actor, ownerNote: body(req).note, area: body(req).area });
+    // GET SUPPORT is available to every role (Q14). While a demo lock is on, the owner unlocks first so a prospect
+    // holding the iPad cannot read diagnostics.
+    return buildSupportReport(pool, { actor: actor(req), ownerNote: body(req).note, area: body(req).area });
   });
-  app.post('/api/support/report/:id/sent', async (req) => { if (!req.actor) throw notSignedIn(); await markReportSent(pool, req.actor, params(req).id, String(body(req).via ?? 'shared')); return { ok: true }; });
+  app.post('/api/support/report/:id/sent', async (req) => { const a = actor(req); await markReportSent(pool, a, params(req).id, String(body(req).via ?? 'shared')); return { ok: true }; });
   app.get('/api/support/reports', async (req) => { const a = actor(req); auth.requirePerm(a, 'support'); return (await pool.query(`SELECT id, created_at, created_by_label, trigger, summary, sent_at, sent_via FROM support_reports ORDER BY created_at DESC LIMIT 50`)).rows; });
   app.post('/api/diagnostics/client-error', async (req) => {
     if (!req.actor) return { ok: true };
@@ -321,7 +328,8 @@ export async function buildApp(pool: pg.Pool, opts: { logger?: boolean } = {}): 
 
   // Media for signed-in users only (library images etc.).
   app.get('/media/*', async (req, reply) => {
-    if (!req.actor) { const u = await auth.userForToken(pool, req.cookies[auth.SESSION_COOKIE]); if (!u) throw forbidden('view this file'); }
+    const u = await auth.userForToken(pool, req.cookies[auth.SESSION_COOKIE]);
+    if (!u || u.locked_at) throw forbidden('view this file');
     const key = 'media/' + (params(req)['*'] as string);
     const p = objectPath(key);
     if (!p) return reply.status(404).send('Not found');

@@ -48,3 +48,10 @@ export function client(a: FastifyInstance) {
     raw: call,
   };
 }
+
+/** Prospect signup as the demo page does it: read the agreement first, then send what was shown. */
+export async function publicSignup(a: FastifyInstance, kind: string, token: string, body: any) {
+  const c = client(a);
+  const t = await c.get(`/api/public/demo/${kind}/${token}/terms?package=${body.package}`);
+  return c.post(`/api/public/demo/${kind}/${token}/signup`, { ...body, termsSha256: t.json?.sha256 });
+}

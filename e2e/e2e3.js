@@ -1,0 +1,10 @@
+const { chromium } = require('playwright');
+(async()=>{const b=await chromium.launch({executablePath:'/opt/pw-browsers/chromium'});const pg=await (await b.newContext({viewport:{width:1440,height:900}})).newPage();const errs=[];
+pg.on('pageerror',e=>errs.push(e.message));pg.on('dialog',d=>d.accept());
+await pg.goto('http://localhost:3000/app');await pg.getByLabel('Email').fill('jim.britt@example.com');await pg.getByLabel('Password').fill('my business password 2026');await pg.getByRole('button',{name:'SIGN IN'}).click();
+await pg.waitForSelector('text=Command Center');await pg.goto('http://localhost:3000/app/projects');await pg.getByRole('link',{name:/Morada/}).first().click();
+await pg.waitForSelector('text=Changes were made after final approval');await pg.getByRole('button',{name:'REVIEW'}).nth(1).click();
+await pg.getByRole('button',{name:'APPROVE SCENE'}).first().click();await pg.waitForTimeout(800);
+const kitBtn=pg.getByRole('button',{name:'APPROVE COMPLETE VIDEO KIT'});console.log('kit button enabled',await kitBtn.isEnabled());
+await kitBtn.click();await pg.waitForSelector('text=✓ COMPLETE VIDEO KIT APPROVED');console.log('final approved in UI; reapproval banner gone:', !(await pg.isVisible('text=Changes were made after final approval')));
+await pg.screenshot({path:'/tmp/claude-0/-home-claude/360ebc77-61a2-5798-95d0-1fdf85f56a7c/scratchpad/shots/22_reapproved.png'});console.log('errors',errs);await b.close();})();

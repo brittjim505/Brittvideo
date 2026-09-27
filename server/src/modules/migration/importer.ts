@@ -126,7 +126,8 @@ export async function importPrototypeExport(pool: pg.Pool, actor: Actor, fileTex
     const findOwner = async (name: string, url: string, market: string) => {
       const exact = entityByName.get(key(name, url));
       if (exact) return exact;
-      const byName = [...entityByName.entries()].find(([k]) => k.split('|')[0] === name.trim().toLowerCase());
+      // Match by name alone only when one side has no website — two different businesses can share a name.
+      const byName = [...entityByName.entries()].find(([k]) => k.split('|')[0] === name.trim().toLowerCase() && (!normaliseWebsite(url) || !k.split('|')[1]));
       if (byName) return byName[1];
       const mm = mapMarket(market);
       const r = await upsertProspect(t, actor, { businessName: name, websiteUrl: url, industry: mm.industry, businessType: mm.type, privateNotes: 'Created during import: a saved prototype project had no matching prospect or client.' });
@@ -167,12 +168,14 @@ export async function importPrototypeExport(pool: pg.Pool, actor: Actor, fileTex
           let pos = 1;
           for (const sc of list) {
             const start = Math.max(0, Number(sc.start) || 0); const end = Math.min(120, Math.max(start + 1, Number(sc.end) || start + 5));
+            const adjusted = start !== sc.start || end !== sc.end;
             const row = { name: sc.name || `Scene ${pos}`, start_s: start, end_s: end, image_ref: imageRef(sc.image), visual: sc.visual || '', narration: sc.narration || '' };
             const h = sceneHash(row);
             const s = (await t.query(`INSERT INTO scenes (deliverable_id, position, name, start_s, end_s, image_ref, visual, narration, content_hash) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9) RETURNING id`,
               [del(kind), pos, row.name, row.start_s, row.end_s, JSON.stringify(row.image_ref), row.visual, row.narration, h])).rows[0];
             S.scenes++;
-            if (approvedFlags(pos - 1, sc)) {
+            if (adjusted && approvedFlags(pos - 1, sc)) S.notes.push(`"${name}": ${kind.replace('_', ' ')} scene ${pos} had invalid timing and was adjusted, so its approval was not carried over.`);
+            if (!adjusted && approvedFlags(pos - 1, sc)) {
               await t.query(`INSERT INTO approvals (project_id, subject_type, subject_id, content_hash, decision, decided_by_label, decided_at) VALUES ($1,'scene',$2,$3,'approved',$4,$5)`,
                 [proj.id, s.id, h, 'Approved in V2 prototype (imported)', approvedAt]);
               S.sceneApprovals++;
@@ -201,7 +204,8 @@ export async function importPrototypeExport(pool: pg.Pool, actor: Actor, fileTex
           const status = kitCarried ? pr.status : (['approved', 'package_downloaded', 'delivered'].includes(pr.status) ? 'needs_reapproval' : pr.status);
           await t.query(`UPDATE production_records SET status=$2, approved_at=$3, package_downloaded_at=$4, delivered_at=$5, delivery_method=$6, delivery_reference=$7 WHERE project_id=$1`,
             [proj.id, status, pr.approvedAt ?? null, pr.packageDownloadedAt ?? null, pr.deliveredAt ?? null, pr.deliveryMethod ?? null, pr.deliveryReference ?? null]);
-          if (pr.status === 'delivered') await t.query(`UPDATE projects SET status='delivered' WHERE id=$1`, [proj.id]);
+          if (pr.status === 'delivered' && kitCarried) await t.query(`UPDATE projects SET status='delivered' WHERE id=$1`, [proj.id]);
+          else if (pr.status === 'delivered') S.notes.push(`"${name}": V2 recorded a delivery on ${pr.deliveredAt ?? 'an unknown date'}, but its final approval could not be verified. The delivery date is kept; the project is marked for reapproval.`);
           else if (kitCarried) await t.query(`UPDATE projects SET status='approved' WHERE id=$1`, [proj.id]);
         } else if (kitCarried) {
           await t.query(`UPDATE production_records SET status='approved', approved_at=$2 WHERE project_id=$1`, [proj.id, fin.approvedAt ?? null]);

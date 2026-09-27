@@ -26,6 +26,6 @@ const PW='my business password 2026';
  await pg.getByRole('button',{name:/WITH TEST CARD/}).click(); await pg.waitForSelector('text=Welcome to BrittVideo'); await step('08_welcome');
  await pg.getByRole('link',{name:'Owner: exit demo'}).click(); await pg.waitForSelector('text=BrittVideo is locked'); await step('09_locked');
  await pg.getByLabel('Your password').fill(PW); await pg.getByRole('button',{name:'UNLOCK'}).click(); await pg.waitForSelector('text=Needs attention today'); await step('10_command_center_new_client');
- await pg.getByRole('button',{name:'OPEN PROJECT'}).first().click(); await pg.waitForSelector('text=Approvals'); await step('11_project_ready');
+ await pg.getByRole('link',{name:'OPEN PROJECT'}).first().click(); await pg.waitForSelector('text=Approvals'); await step('11_project_ready');
  console.log('ERRORS',errs); await b.close();
 })();

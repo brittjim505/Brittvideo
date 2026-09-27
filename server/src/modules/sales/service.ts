@@ -28,7 +28,7 @@ export interface SaleInput {
   package: PackageCode;
   /** Owner-only deal-specific prices (M3, M6). Prospects can never set prices (C3). */
   overrides?: Record<string, { agreedCents: number; reason?: string }>;
-  agreement: { accepted: boolean; name: string; email?: string | null };
+  agreement: { accepted: boolean; name: string; email?: string | null; shownTermsSha256?: string | null };
   meta?: { ip?: string; userAgent?: string };
 }
 
@@ -95,6 +95,10 @@ export async function completeSale(pool: pg.Pool, actor: Actor, input: SaleInput
     const monthly = lines.filter((l) => l.billing === 'monthly').reduce((s, l) => s + l.agreed, 0);
     const priceText = monthly ? `${money(oneTime)} one-time + ${money(monthly)} per month` : `${money(oneTime)} one-time`;
     const text = termsText(input.package, priceText);
+    // The stored agreement must be exactly what the person read (M10). Prospect signups always send what they saw.
+    if ((actor.kind === 'prospect' || input.agreement.shownTermsSha256) && input.agreement.shownTermsSha256 !== sha256(text)) {
+      throw new OwnerError('The agreement was just updated. Please read it again, then sign.', 409, 'terms_changed');
+    }
     await t.query(`INSERT INTO agreements (order_id, package, terms_version, terms_text, terms_sha256, accepted_name, accepted_email, accepted_ip, accepted_user_agent)
       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9)`, [order.id, input.package, TERMS_VERSION, text, sha256(text), input.agreement.name.trim(),
       input.agreement.email?.trim() || b.email, input.meta?.ip ?? null, input.meta?.userAgent?.slice(0, 300) ?? null]);
@@ -139,30 +143,58 @@ async function adapters(pool: pg.Pool) {
   return paymentAdapters({ accessToken: await readSecret(pool, 'square.access_token').catch(() => null), locationId: await readSecret(pool, 'square.location_id').catch(() => null) });
 }
 
+/**
+ * Charge an order (M11–M15, Q8–Q10). Exactly-once per ORDER, not per click:
+ * - all payment work for one order is serialised with an advisory lock;
+ * - an order already paid is never charged again;
+ * - an unfinished (pending) attempt is resumed with the SAME provider idempotency key, so if the provider charged
+ *   but BrittVideo crashed before recording it, the retry picks up the existing charge instead of making a new one;
+ * - a new provider key is created only after a real decline/failure.
+ * The database also allows at most one paid and one pending payment per order (migration 0002).
+ */
 export async function payOrder(pool: pg.Pool, actor: Actor, orderId: string, req: { attemptKey: string; provider: 'test' | 'square'; testOutcome?: 'approve' | 'decline' }) {
   if (actor.kind === 'user') requirePerm(actor, 'work');
-  const { result } = await once(pool, 'payment', req.attemptKey, { orderId, ...req }, async () => {
+  const { result } = await once(pool, 'payment', req.attemptKey, { orderId, ...req }, () => withOrderLock(pool, orderId, async () => {
     const order = (await pool.query(`SELECT * FROM orders WHERE id=$1`, [orderId])).rows[0];
     if (!order) throw notFound('order');
     if (order.status === 'paid') return { status: 'paid', alreadyPaid: true, orderId };
     const amount = (await pool.query(`SELECT coalesce(sum(sold_price_cents),0)::int n FROM order_lines WHERE order_id=$1 AND billing='one_time'`, [orderId])).rows[0].n;
     const adapter = (await adapters(pool))[req.provider];
     if (!adapter) throw new OwnerError('That way of paying is not available here.', 400, 'no_adapter');
-    // Record the attempt BEFORE calling the provider, so a crash mid-call is recoverable (Q10).
-    const pay = (await pool.query(`INSERT INTO payments (order_id, provider, mode, idempotency_key, amount_cents, status)
-      VALUES ($1,$2,$3,$4,$5,'pending') ON CONFLICT (idempotency_key) DO UPDATE SET updated_at=now() RETURNING *`,
-      [orderId, adapter.name, adapter.mode, `pay:${orderId}:${req.attemptKey}`, amount])).rows[0];
+    // Resume an unfinished attempt (same provider key) or start a new one. Recorded BEFORE calling the provider (Q10).
+    let pay = (await pool.query(`SELECT * FROM payments WHERE order_id=$1 AND status='pending' AND provider=$2`, [orderId, adapter.name])).rows[0];
+    if (pay && pay.provider_payment_ref) {
+      const ext = await adapter.getPayment(pay.provider_payment_ref).catch(() => null);
+      if (ext && ext.status !== 'pending') return applyPaymentResult(pool, actor, pay.id, ext);
+    }
+    if (!pay) {
+      const n = (await pool.query(`SELECT count(*)::int n FROM payments WHERE order_id=$1`, [orderId])).rows[0].n;
+      pay = (await pool.query(`INSERT INTO payments (order_id, provider, mode, idempotency_key, amount_cents, status)
+        VALUES ($1,$2,$3,$4,$5,'pending') RETURNING *`, [orderId, adapter.name, adapter.mode, `pay:${orderId}:${n + 1}`, amount])).rows[0];
+    }
     let r;
     try {
       r = await adapter.createPayment({ idempotencyKey: pay.idempotency_key, amountCents: amount, orderNumber: order.order_number, description: `BrittVideo order ${order.order_number}`, testOutcome: req.testOutcome });
     } catch (e: any) {
       await logDiagnostic(pool, 'error', 'payments', 'Payment provider call failed', { orderId, provider: adapter.name, error: e.message });
-      await recordRecovery(pool, 'payments', `A payment attempt for order ${order.order_number} could not reach ${adapter.name}. Nothing was charged twice; it can be retried safely.`, 'needs_attention', e.message);
+      await recordRecovery(pool, 'payments', `A payment attempt for order ${order.order_number} could not reach ${adapter.name}. It will be checked before any retry, so nothing is charged twice.`, 'needs_attention', e.message);
       throw e;
     }
     return applyPaymentResult(pool, actor, pay.id, r);
-  });
+  }));
   return result;
+}
+
+/** Serialise all payment activity for one order across requests and processes. */
+async function withOrderLock<T>(pool: pg.Pool, orderId: string, fn: () => Promise<T>): Promise<T> {
+  const c = await pool.connect();
+  try {
+    await c.query(`SELECT pg_advisory_lock(hashtextextended($1, 42))`, ['order-pay:' + orderId]);
+    return await fn();
+  } finally {
+    await c.query(`SELECT pg_advisory_unlock(hashtextextended($1, 42))`, ['order-pay:' + orderId]).catch(() => {});
+    c.release();
+  }
 }
 
 async function applyPaymentResult(pool: pg.Pool, actor: Actor, paymentId: string, r: { status: string; providerRef: string | null; failureMessage?: string | null; paymentLinkUrl?: string | null }) {
@@ -188,17 +220,18 @@ async function markOrderPaid(t: pg.PoolClient, actor: Actor, orderId: string) {
 export async function recordManualPayment(pool: pg.Pool, actor: Actor, orderId: string, input: { attemptKey: string; amountCents: number; note: string }) {
   requirePerm(actor, 'work', 'record payments');
   if (!input.note?.trim()) throw new OwnerError('Please note how it was paid (for example "Check #1042").');
-  const { result } = await once(pool, 'manual_payment', input.attemptKey, { orderId, ...input }, () => tx(async (t) => {
+  const { result } = await once(pool, 'manual_payment', input.attemptKey, { orderId, ...input }, () => withOrderLock(pool, orderId, () => tx(async (t) => {
     const o = (await t.query(`SELECT * FROM orders WHERE id=$1 FOR UPDATE`, [orderId])).rows[0];
     if (!o) throw notFound('order');
     if (o.status === 'paid') return { status: 'paid', alreadyPaid: true, orderId };
     const due = (await t.query(`SELECT coalesce(sum(sold_price_cents),0)::int n FROM order_lines WHERE order_id=$1 AND billing='one_time'`, [orderId])).rows[0].n;
     if (!Number.isInteger(input.amountCents) || input.amountCents !== due) throw new OwnerError(`The amount due today is ${money(due)}. Record the full amount, or ask support about partial payments.`);
+    await t.query(`UPDATE payments SET status='cancelled', failure_message='Closed: paid another way (recorded manually).' WHERE order_id=$1 AND status='pending'`, [orderId]);
     await t.query(`INSERT INTO payments (order_id, provider, mode, idempotency_key, amount_cents, status, method_note) VALUES ($1,'manual',$2,$3,$4,'paid',$5)`,
       [orderId, config().isLive ? 'live' : 'test', `manual:${orderId}:${input.attemptKey}`, input.amountCents, input.note.trim()]);
     await markOrderPaid(t, actor, orderId);
     return { status: 'paid', orderId };
-  }, pool));
+  }, pool)));
   return result;
 }
 

@@ -91,10 +91,10 @@ function VideoEmbed({ url, title }: { url: string; title: string }) {
 
 function Signup({ v, pkg, setPkg, onBack, onDone }: { v: View; pkg: 'standard' | 'premier'; setPkg: (p: any) => void; onBack: () => void; onDone: (o: any) => void }) {
   const [f, setF] = useState({ contactName: '', email: '', phone: '' });
-  const [terms, setTerms] = useState<string>('');
+  const [terms, setTerms] = useState<string>(''); const [termsSha, setTermsSha] = useState('');
   const [name, setName] = useState(''); const [agree, setAgree] = useState(false);
   const [saleKey] = useState(newKey); const [busy, setBusy] = useState(false); const [err, setErr] = useState<string | null>(null);
-  useEffect(() => { api('GET', `${base}/terms?package=${pkg}`).then((t) => setTerms(t.text)).catch(() => setTerms('')); setAgree(false); }, [pkg]);
+  useEffect(() => { api('GET', `${base}/terms?package=${pkg}`).then((t) => { setTerms(t.text); setTermsSha(t.sha256); }).catch(() => setTerms('')); setAgree(false); }, [pkg]);
   const chosen = v.packages.find((p: any) => p.code === pkg);
   const ready = f.contactName.trim() && /\S+@\S+\.\S+/.test(f.email) && name.trim() && agree;
   return <section className="demo-section"><div className="card" style={{ maxWidth: 720, margin: '0 auto' }}>
@@ -114,8 +114,11 @@ function Signup({ v, pkg, setPkg, onBack, onDone }: { v: View; pkg: 'standard' |
     <div className="actions">
       <button className={'btn ' + (ready ? 'next' : '')} disabled={!ready || busy} onClick={async () => {
         setBusy(true); setErr(null);
-        try { onDone(await api('POST', `${base}/signup`, { saleKey, package: pkg, ...f, agreementAccepted: agree, agreementName: name })); }
-        catch (e: any) { setErr(e instanceof ApiError ? e.message : 'Something went wrong. Please try again.'); } finally { setBusy(false); }
+        try { onDone(await api('POST', `${base}/signup`, { saleKey, package: pkg, ...f, agreementAccepted: agree, agreementName: name, termsSha256: termsSha })); }
+        catch (e: any) {
+          setErr(e instanceof ApiError ? e.message : 'Something went wrong. Please try again.');
+          if (e?.code === 'terms_changed') api('GET', `${base}/terms?package=${pkg}`).then((t) => { setTerms(t.text); setTermsSha(t.sha256); setAgree(false); }).catch(() => {});
+        } finally { setBusy(false); }
       }}>{busy ? 'Saving…' : 'CONTINUE TO PAYMENT'}</button>
       <button className="btn" onClick={onBack}>BACK</button>
     </div>
@@ -125,13 +128,15 @@ function Signup({ v, pkg, setPkg, onBack, onDone }: { v: View; pkg: 'standard' |
 
 function Pay({ order, onPaid }: { order: any; onPaid: (o: any) => void }) {
   const [busy, setBusy] = useState(false); const [err, setErr] = useState<string | null>(null);
-  const [attempt, setAttempt] = useState(newKey);
+  const [attempt, setAttempt] = useState(newKey); const lastOutcome = React.useRef<string | null>(null);
   const test = order.paymentOptions.includes('test');
   const pay = async (outcome: 'approve' | 'decline') => {
+    const key = outcome === lastOutcome.current ? attempt : newKey(); lastOutcome.current = outcome; if (key !== attempt) setAttempt(key);
     setBusy(true); setErr(null);
-    try { const o = await api('POST', `${base}/pay`, { attemptKey: attempt, testOutcome: outcome });
-      if (o.status === 'paid') onPaid(o); else { setErr('The card was declined. Please try a different card.'); setAttempt(newKey()); } }
-    catch (e: any) { setErr(e.message); setAttempt(newKey()); } finally { setBusy(false); }
+    try { const o = await api('POST', `${base}/pay`, { attemptKey: key, testOutcome: outcome });
+      if (o.status === 'paid') onPaid(o); else { setErr('The card was declined. Please try a different card.'); setAttempt(newKey()); lastOutcome.current = null; } }
+    // Keep the same attempt after a network or server problem so a retry resumes it instead of paying twice.
+    catch (e: any) { setErr(e.message); } finally { setBusy(false); }
   };
   return <section className="demo-section"><div className="card" style={{ maxWidth: 620, margin: '0 auto' }}>
     <h2>Payment</h2>
