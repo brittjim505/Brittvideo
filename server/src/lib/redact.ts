@@ -10,6 +10,7 @@ const PATTERNS: [RegExp, string][] = [
   [/Bearer\s+[A-Za-z0-9._~+/=-]+/gi, 'Bearer [REDACTED]'],
   [/(postgres(?:ql)?:\/\/[^:\s]+:)[^@\s]+@/gi, '$1[REDACTED]@'],               // DB passwords in URLs
   [/([?&](?:token|key|secret|signature|t)=)[^&\s]+/gi, '$1[REDACTED]'],
+  [/\b((?:access[_-]?)?token|secret|password|passwd|api[_-]?key|apikey|signature|authorization)(\s*[=:]\s*)("?)[^\s"&,;]+/gi, '$1$2$3[REDACTED]'],
   [/\b[A-Za-z0-9_-]{40,}\b/g, '[REDACTED-LONG-TOKEN]'],                        // long opaque tokens
 ];
 
