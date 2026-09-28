@@ -1,0 +1,14 @@
+**/node_modules
+**/dist
+.git
+.github
+e2e
+prototype
+docs
+**/.env
+**/.env.*
+!.env.example
+server/backups
+server/storage
+server/data
+**/*.log

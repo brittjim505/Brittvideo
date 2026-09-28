@@ -91,7 +91,7 @@ export async function buildApp(pool: pg.Pool, opts: { logger?: boolean } = {}): 
     return reply.status(500).send({ error: { code: 'unexpected', message: 'Something went wrong on BrittVideo\'s side. Your saved work is safe. Try again, and if it happens again use GET SUPPORT — you don\'t need to figure out what happened.', reference: req.id } });
   });
 
-  const cookieOpts = () => ({ path: '/', httpOnly: true, sameSite: 'strict' as const, secure: config().isLive, maxAge: config().SESSION_DAYS * 86400 });
+  const cookieOpts = () => ({ path: '/', httpOnly: true, sameSite: 'strict' as const, secure: config().isLive || config().PUBLIC_BASE_URL.startsWith('https://'), maxAge: config().SESSION_DAYS * 86400 });
 
   // =============================================================================================================
   // Setup + auth

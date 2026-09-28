@@ -39,6 +39,12 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): Config {
   if (c.APP_ENV !== 'live' && /live|prod/i.test(dbName)) {
     throw new Error(`BrittVideo ${c.APP_ENV} mode must not use the live database.`);
   }
+  if (c.APP_ENV === 'live' && !c.PUBLIC_BASE_URL.startsWith('https://')) {
+    throw new Error('BrittVideo live mode must be reached over https:// (set PUBLIC_BASE_URL to the https address).');
+  }
+  if (env.ALLOW_PRIVATE_FETCH === 'true' && c.HOST !== '127.0.0.1' && c.APP_ENV !== 'development') {
+    throw new Error('ALLOW_PRIVATE_FETCH is for local testing only — remove it from this server.');
+  }
   if (c.SECRETS_ENCRYPTION_KEY === c.BACKUP_ENCRYPTION_KEY) {
     throw new Error('SECRETS_ENCRYPTION_KEY and BACKUP_ENCRYPTION_KEY must be different.');
   }
