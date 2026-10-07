@@ -139,3 +139,12 @@ pre.report { white-space: pre-wrap; background: var(--surface-2); border: 1px so
 .textsize button { background: transparent; color: #e5e7eb; border: 0; padding: 6px 10px; font-weight: 800; cursor: pointer; font-family: inherit; }
 .textsize button.on { background: #e5e7eb; color: #111827; }
 @media (max-width: 700px) { .scene-row { grid-template-columns: 1fr; } .scene-row img { width: 100%; } }
+
+/* Image Library folders: four groups (Dentists, Facilities, Attorneys, Others), one folder per business. */
+.folderlist { display: grid; gap: 8px; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); margin-top: 4px; }
+.folder { display: flex; flex-direction: column; align-items: flex-start; gap: 2px; text-align: left; font: inherit; cursor: pointer;
+  padding: 12px 14px; border: 2px solid var(--line); border-radius: 12px; background: var(--surface); color: var(--ink); }
+.folder::before { content: "📁"; font-size: 22px; line-height: 1; margin-bottom: 4px; }
+.folder span { font-size: 14px; color: var(--muted); }
+.folder:hover { border-color: var(--blue); }
+.folder.on { border-color: var(--blue); background: var(--blue-soft); }

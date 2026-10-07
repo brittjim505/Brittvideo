@@ -119,9 +119,10 @@ function StepImages({ b, reload, next }: { b: any; reload: () => void; next: () 
   const used = b.images.filter((i: any) => i.selected).length;
   return <section className="card">
     <div className="row between"><h2 style={{ margin: 0 }}>Pictures for this project ({used} in use)</h2>
-      <div className="row"><button className="btn" onClick={() => setPicking(true)}>ADD FROM MY IMAGE LIBRARY</button>
+      <div className="row">{b.folderWaiting > 0 && <button className="btn next" disabled={a.busy} onClick={() => a.run(async () => { const r = await post(`/api/projects/${pid}/images/from-folder`); reload(); return r.ownerMessage as string; }).then((m) => { if (m) a.setOk(m); })}>ADD {b.folderWaiting} PICTURE{b.folderWaiting === 1 ? '' : 'S'} FROM {String(b.project.business_name ?? 'THIS BUSINESS').toUpperCase()}'S FOLDER</button>}
+        <button className="btn" onClick={() => setPicking(true)}>ADD FROM MY IMAGE LIBRARY</button>
         <label className="btn">UPLOAD FROM MY COMPUTER<input type="file" accept="image/jpeg,image/png,image/webp" multiple style={{ display: 'none' }}
-          onChange={(e) => { const files = [...(e.target.files ?? [])]; e.target.value = ''; a.run(async () => { await uploadFiles(files, { projectId: pid, clientId: b.project.client_id, category: 'Client website' }); reload(); }); }} /></label></div></div>
+          onChange={(e) => { const files = [...(e.target.files ?? [])]; e.target.value = ''; a.run(async () => { await uploadFiles(files, { projectId: pid, clientId: b.project.client_id, prospectId: b.project.client_id ? null : b.project.prospect_id, category: 'Client website' }); reload(); }); }} /></label></div></div>
     <p className="help">Pictures from the client’s website still need the client’s permission before final production. Do Not Use pictures are never placed in a video.</p>
     {b.images.length === 0 ? <p className="empty">No pictures yet. Analyze the website, add from your Image Library, or upload.</p> :
       <div className="imggrid">{b.images.map((img: any) => <div key={img.id} className={'imgcard ' + (img.status === 'do_not_use' ? 'dnu' : img.selected ? 'on' : '')}>

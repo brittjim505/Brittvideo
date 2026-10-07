@@ -10,6 +10,7 @@ import { safeFetch, FetchRefused } from '../../integrations/web-fetch.js';
 import { putObject } from '../../integrations/storage.js';
 import { logDiagnostic } from '../support/diagnostics.js';
 import { createCheckpoint } from '../projects/service.js';
+import { categoryFor } from './site-images.js';
 
 /**
  * Website Analysis (K3, S8, "ground generated claims in source material").
@@ -136,9 +137,9 @@ async function analyzeWebsiteOnce(pool: pg.Pool, actor: Actor, projectId: string
       if (!assetId) {
         const obj = putObject(r.body, type[1] === 'jpeg' ? 'jpg' : type[1]);
         const name = img.alt || decodeURIComponent(new URL(img.url).pathname.split('/').pop() ?? 'Website image').replace(/\.[a-z]+$/i, '').replace(/[-_]+/g, ' ');
-        assetId = (await pool.query(`INSERT INTO assets (client_id, title, category, source_type, source_url, rights_note, status, protection_class, storage_key, sha256, bytes, mime, alt_text, created_by)
-          VALUES ($1,$2,'Client website','website',$3,$4,'available','working',$5,$6,$7,$8,$9,$10) RETURNING id`,
-          [p.client_id, name.slice(0, 120), img.url, `From ${new URL(img.page).hostname} — confirm the client's permission before final production.`, obj.key, hash, obj.bytes, `image/${type[1] === 'jpg' ? 'jpeg' : type[1]}`, img.alt || null, actor.userId])).rows[0].id;
+        assetId = (await pool.query(`INSERT INTO assets (client_id, title, category, source_type, source_url, rights_note, status, protection_class, storage_key, sha256, bytes, mime, alt_text, created_by, prospect_id)
+          VALUES ($1,$2,$11,'website',$3,$4,'available','working',$5,$6,$7,$8,$9,$10,$12) RETURNING id`,
+          [p.client_id, name.slice(0, 120), img.url, `From ${new URL(img.page).hostname} — confirm the client's permission before final production.`, obj.key, hash, obj.bytes, `image/${type[1] === 'jpg' ? 'jpeg' : type[1]}`, img.alt || null, actor.userId, categoryFor(p.industry), p.client_id ? null : p.prospect_id ?? null])).rows[0].id;
       }
       assets.push({ id: assetId, usable: !existing || ['available', 'approved'].includes(existing.status) });
     } catch { /* one bad image never stops the analysis */ }

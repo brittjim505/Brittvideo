@@ -28,6 +28,7 @@ import { objectPath } from './integrations/storage.js';
 import { TERMS_VERSION, termsText } from './modules/sales/terms.js';
 import * as analysis from './modules/builder/analysis.js';
 import * as images from './modules/builder/images.js';
+import * as siteImages from './modules/builder/site-images.js';
 import * as kit from './modules/builder/kit.js';
 import { money, sha256 } from './lib/util.js';
 
@@ -295,11 +296,13 @@ export async function buildApp(pool: pg.Pool, opts: { logger?: boolean } = {}): 
     const detail = await projects.getProject(pool, a, id);
     const latest = (await pool.query(`SELECT id, url, status, owner_message, pages, created_at FROM website_analyses WHERE project_id=$1 ORDER BY created_at DESC LIMIT 1`, [id])).rows[0] ?? null;
     return { ...detail, facts: await analysis.listFacts(pool, id), images: await images.projectImages(pool, id), analysis: latest,
+      folderWaiting: (await siteImages.folderPicturesForProject(pool, id)).length,
       options: kit.builderOptions(detail.project.industry ?? 'other'), deliveries: await kit.deliveryHistory(pool, id) };
   });
   app.post('/api/projects/:id/analyze', async (req) => analysis.analyzeWebsite(pool, actor(req), params(req).id, body(req).url));
   app.post('/api/projects/:id/facts', async (req) => analysis.addFact(pool, actor(req), params(req).id, body(req).text));
   app.patch('/api/projects/:id/facts/:fid', async (req) => analysis.updateFact(pool, actor(req), params(req).id, params(req).fid, body(req)));
+  app.post('/api/projects/:id/images/from-folder', async (req) => siteImages.addFolderToProject(pool, actor(req), params(req).id));
   app.post('/api/projects/:id/images/:assetId', async (req) => images.setProjectImage(pool, actor(req), params(req).id, params(req).assetId, !!body(req).selected));
   app.post('/api/projects/:id/build', async (req) => { const b = body(req); return kit.buildKit(pool, actor(req), params(req).id, { story: b.story, tone: b.tone, websiteSecs: Number(b.websiteSecs), platform: b.platform, confirmReplaceApproved: !!b.confirmReplaceApproved }); });
   app.put('/api/projects/:id/scenes/:sceneId/image', async (req) => kit.setSceneImage(pool, actor(req), params(req).id, params(req).sceneId, body(req).assetId ?? null));
@@ -322,7 +325,15 @@ export async function buildApp(pool: pg.Pool, opts: { logger?: boolean } = {}): 
   app.post('/api/quick-videos', async (req) => kit.createQuickVideo(pool, actor(req), body(req)));
 
   // Image Library
-  app.get('/api/images', async (req) => { const qy = req.query as any; return images.listLibrary(pool, actor(req), { view: qy.view, clientId: qy.clientId, search: qy.q, category: qy.category }); });
+  app.get('/api/images', async (req) => { const qy = req.query as any; return images.listLibrary(pool, actor(req), { view: qy.view, clientId: qy.clientId, search: qy.q, category: qy.category, folder: qy.folder }); });
+  // GET PICTURES FROM A WEBSITE: scan (kept in memory for 30 minutes), preview, then save the ticked pictures to a folder.
+  app.get('/api/image-folders', async (req) => siteImages.listFolders(pool, actor(req)));
+  app.post('/api/image-scans', async (req) => siteImages.scanWebsite(pool, actor(req), body(req)));
+  app.get('/api/image-scans/:scanId/:n', async (req, reply) => {
+    const item = siteImages.scanPreview(actor(req), params(req).scanId, Number(params(req).n));
+    return reply.header('Content-Type', item.mime).header('X-Content-Type-Options', 'nosniff').header('Cache-Control', 'private, max-age=1800').send(item.buf);
+  });
+  app.post('/api/image-scans/:scanId/save', async (req) => siteImages.saveScan(pool, actor(req), params(req).scanId, body(req)));
   app.post('/api/images', async (req) => images.uploadImage(pool, actor(req), body(req)));
   app.patch('/api/images/:id', async (req) => images.updateImage(pool, actor(req), params(req).id, body(req)));
   app.post('/api/images/delete', async (req) => images.deleteImages(pool, actor(req), body(req).ids ?? [], !!body(req).confirmInUse));

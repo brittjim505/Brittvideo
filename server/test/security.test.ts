@@ -126,7 +126,7 @@ describe('secrets never leave the server (V18, S16, Q17)', () => {
     expect(rep.status).toBe(200);
     expect(rep.json.body).not.toContain(secret);
     expect(rep.json.body).not.toContain('4111 1111 1111 1111');
-    expect(rep.json.body).toMatch(/App version: 3\.0\.0/);
+    expect(rep.json.body).toMatch(/App version: 3\.0\./);
     expect(rep.json.body).toMatch(/square\.access_token: set/);
   });
 });

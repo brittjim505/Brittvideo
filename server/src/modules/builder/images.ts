@@ -19,8 +19,9 @@ import { detachImageFromScenes } from '../projects/service.js';
 export const CATEGORIES = ['Senior Living', 'Dentist', 'Medical / Doctor', 'Attorney', 'Plumber', 'General Business', 'Logo', 'Client website', 'Other'];
 const MIMES: Record<string, string> = { 'image/jpeg': 'jpg', 'image/png': 'png', 'image/webp': 'webp' };
 
-export async function uploadImage(pool: pg.Pool, actor: Actor, input: { dataBase64: string; mime: string; title?: string; category?: string; clientId?: string | null; projectId?: string | null; rightsNote?: string }) {
+export async function uploadImage(pool: pg.Pool, actor: Actor, input: { dataBase64: string; mime: string; title?: string; category?: string; clientId?: string | null; prospectId?: string | null; projectId?: string | null; rightsNote?: string }) {
   requirePerm(actor, 'work');
+  if (input.clientId && input.prospectId) throw new OwnerError('Choose one folder: a client or a prospect.');
   const ext = MIMES[input.mime];
   if (!ext) throw new OwnerError('Please choose a JPEG, PNG or WebP picture.');
   const buf = Buffer.from(input.dataBase64 ?? '', 'base64');
@@ -32,10 +33,10 @@ export async function uploadImage(pool: pg.Pool, actor: Actor, input: { dataBase
   const dup = (await pool.query(`SELECT id, title FROM assets WHERE sha256=$1 AND status NOT IN ('permanently_deleted','recently_deleted') LIMIT 1`, [hash])).rows[0];
   const obj = putObject(buf, ext);
   return tx(async (t) => {
-    const a = (await t.query(`INSERT INTO assets (client_id, title, category, source_type, rights_note, status, protection_class, storage_key, sha256, bytes, mime, created_by)
-      VALUES ($1,$2,$3,'library_upload',$4,'available','working',$5,$6,$7,$8,$9) RETURNING *`,
+    const a = (await t.query(`INSERT INTO assets (client_id, title, category, source_type, rights_note, status, protection_class, storage_key, sha256, bytes, mime, created_by, prospect_id)
+      VALUES ($1,$2,$3,'library_upload',$4,'available','working',$5,$6,$7,$8,$9,$10) RETURNING *`,
       [input.clientId ?? null, (input.title || 'New image').slice(0, 120), CATEGORIES.includes(input.category ?? '') ? input.category : 'General Business',
-        input.rightsNote ?? 'Uploaded by BrittVideo — confirm commercial-use rights for images found online.', obj.key, hash, obj.bytes, input.mime, actor.userId])).rows[0];
+        input.rightsNote ?? 'Uploaded by BrittVideo — confirm commercial-use rights for images found online.', obj.key, hash, obj.bytes, input.mime, actor.userId, input.prospectId ?? null])).rows[0];
     if (input.projectId) await t.query(`INSERT INTO project_images (project_id, asset_id, selected, position) VALUES ($1,$2,true,1000) ON CONFLICT DO NOTHING`, [input.projectId, a.id]);
     await audit(t, actor, 'image.uploaded', { type: 'asset', id: a.id }, `Image added: ${a.title}`);
     return { asset: publicAsset(a), duplicateOf: dup ? { id: dup.id, title: dup.title } : null };
@@ -44,19 +45,29 @@ export async function uploadImage(pool: pg.Pool, actor: Actor, input: { dataBase
 
 export function publicAsset(a: any) {
   return { id: a.id, title: a.title, category: a.category, status: a.status, sourceType: a.source_type, sourceUrl: a.source_url, rightsNote: a.rights_note,
-    url: a.storage_key ? '/' + a.storage_key : null, bytes: a.bytes, clientId: a.client_id, createdAt: a.created_at, deletedAt: a.deleted_at, altText: a.alt_text,
+    url: a.storage_key ? '/' + a.storage_key : null, bytes: a.bytes, clientId: a.client_id, prospectId: a.prospect_id ?? null, createdAt: a.created_at, deletedAt: a.deleted_at, altText: a.alt_text,
     outdated: a.outdated_flag, inUse: a.in_use ?? undefined, duplicateCount: a.duplicate_count ?? undefined };
 }
 
 const USAGE_SQL = `(SELECT count(*)::int FROM scenes s JOIN deliverables d ON d.id=s.deliverable_id JOIN projects p ON p.id=d.project_id
    WHERE (s.image_ref->>'assetId')::text = a.id::text AND p.archived_at IS NULL)`;
 
-export async function listLibrary(pool: pg.Pool, actor: Actor, f: { view?: 'library' | 'recently_deleted' | 'unused' | 'duplicates' | 'client'; clientId?: string; search?: string; category?: string }) {
+export async function listLibrary(pool: pg.Pool, actor: Actor, f: { view?: 'library' | 'recently_deleted' | 'unused' | 'duplicates' | 'client'; clientId?: string; search?: string; category?: string; folder?: string }) {
   requirePerm(actor, 'work');
   const where: string[] = []; const p: unknown[] = [];
   if (f.view === 'recently_deleted') where.push(`a.status='recently_deleted'`);
   else where.push(`a.status NOT IN ('recently_deleted','permanently_deleted')`);
-  if (f.view === 'client' && f.clientId) { p.push(f.clientId); where.push(`a.client_id=$${p.length}`); }
+  if (f.view === 'client' && f.clientId && !f.folder) f.folder = 'client:' + f.clientId;
+  // Folders: 'client:<id>' (also shows pictures saved while it was a prospect), 'prospect:<id>', 'general' (no folder).
+  const fm = /^(client|prospect):([0-9a-f-]{36})$/i.exec(f.folder ?? '');
+  if (fm?.[1] === 'client') { p.push(fm[2]); where.push(`(a.client_id=$${p.length} OR a.prospect_id = (SELECT source_prospect_id FROM clients WHERE id=$${p.length}))`); }
+  else if (fm?.[1] === 'prospect') { p.push(fm[2]); where.push(`a.prospect_id=$${p.length}`); }
+  else if (/^group:(dental|senior_care|attorneys|other)$/.test(f.folder ?? '')) {
+    p.push(f.folder!.slice(6));
+    where.push(`(EXISTS (SELECT 1 FROM clients c WHERE c.archived_at IS NULL AND c.industry=$${p.length} AND (c.id=a.client_id OR (c.source_prospect_id IS NOT NULL AND c.source_prospect_id=a.prospect_id)))
+      OR EXISTS (SELECT 1 FROM prospects pr WHERE pr.archived_at IS NULL AND pr.status <> 'converted' AND pr.industry=$${p.length} AND pr.id=a.prospect_id))`);
+  }
+  else if (f.folder === 'general') where.push(`a.client_id IS NULL AND a.prospect_id IS NULL`);
   if (f.search) { p.push('%' + f.search.toLowerCase() + '%'); where.push(`(lower(a.title) LIKE $${p.length} OR lower(coalesce(a.category,'')) LIKE $${p.length})`); }
   if (f.category && f.category !== 'All Categories') { p.push(f.category); where.push(`a.category=$${p.length}`); }
   if (f.view === 'unused') where.push(`${USAGE_SQL} = 0 AND NOT EXISTS (SELECT 1 FROM project_images pi WHERE pi.asset_id=a.id AND pi.selected)`);
@@ -104,7 +115,8 @@ export async function deleteImages(pool: pg.Pool, actor: Actor, ids: string[], c
 
 export async function restoreImages(pool: pg.Pool, actor: Actor, ids: string[]) {
   requirePerm(actor, 'work');
-  const r = await pool.query(`UPDATE assets SET status='available', deleted_at=NULL WHERE id = ANY($1::uuid[]) AND status='recently_deleted' RETURNING id`, [ids]);
+  const r = await pool.query(`UPDATE assets SET status='available', deleted_at=NULL WHERE id = ANY($1::uuid[]) AND status='recently_deleted'
+    AND NOT EXISTS (SELECT 1 FROM assets t WHERE t.sha256=assets.sha256 AND t.status='permanently_deleted') RETURNING id`, [ids]);
   await audit(pool, actor, 'image.restored', null, `${r.rowCount} image(s) restored from Recently Deleted`);
   return { restored: r.rowCount };
 }

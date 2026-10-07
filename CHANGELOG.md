@@ -2,6 +2,22 @@
 
 Requirement-affecting changes only. Newest first.
 
+## 3.0.1 — 2026-10-07
+
+### Added — Get pictures from a website + business folders
+- Image Library: **GET PICTURES FROM A WEBSITE**. Choose a folder (its website fills in), **SCAN WEBSITE** reads the home
+  page and up to 8 more pages on the same site and finds every picture (normal, lazy-loaded, largest srcset size,
+  <picture> sources, share pictures, CSS backgrounds). Icons (under 200 px), SVG/GIF, duplicates and permanently deleted
+  pictures are left out. Results are a preview kept in memory for 30 minutes — nothing is saved until the owner ticks
+  pictures and presses **SAVE n PICTURES TO …**. Same website-safety rules as Website Analysis.
+- Folders: four groups — **Dentists, Facilities, Attorneys, Others** (from the business's industry) — each with one folder
+  per client or prospect, plus the General library. A client's folder also shows pictures saved while it was a prospect.
+  Saved pictures get the group's category (Dentist / Senior Living / Attorney / General Business) unless one is chosen.
+- Builder, Review Images: **ADD n PICTURES FROM <BUSINESS>'S FOLDER** puts every usable folder picture into the new
+  video, so later videos for the same client don't need a new scan. Do Not Use pictures are never added.
+- Website Analysis now files its pictures in the business's folder (also for prospects) with the group's category.
+- Migration 0004: `assets.prospect_id` (a picture belongs to a client, a prospect, or neither).
+
 ## 3.0.0-phase3 — 2026-09-27
 
 ### Added — Builder (Phase 3)

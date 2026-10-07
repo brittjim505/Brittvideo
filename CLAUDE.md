@@ -21,5 +21,5 @@ Never change approved business rules without asking him. Locked decisions: Stand
   github.com/brittjim505/Brittvideo (branch main).
 
 ## Phases
-1–3 done (foundation, sales, Builder). Next: 4 production provider · 5 delivery/hosting · 6 communications ·
+1–3 done (foundation, sales, Builder); 3.0.1 adds website pictures + business folders (Dentists/Facilities/Attorneys/Others). Next: 4 production provider · 5 delivery/hosting · 6 communications ·
 7 Premier scheduling · 8 Square live payments. See `docs/ARCHITECTURE.md`.

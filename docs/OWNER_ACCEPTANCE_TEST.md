@@ -71,4 +71,13 @@ contacts real clients.
 41. Press **Image Library**. Pictures from the website are there. Try **Recently Deleted** after deleting one, then restore it.
 42. At the top right press **A++**. Everything gets larger and the whole menu still shows.
 
-When all 42 steps match, Phases 2 and 3 are accepted. Tell Claude "Phase 2 accepted" (or the step numbers that didn't match).
+### Part I — Pictures from a website (3.0.1)
+43. Press **Image Library**. Under **Folders** you see **DENTISTS, FACILITIES, ATTORNEYS, OTHERS** and **GENERAL LIBRARY**.
+    Press **DENTISTS**: each dentist (client or prospect) has its own folder.
+44. Open one dentist's folder and press **GET PICTURES FROM … WEBSITE**, then **SCAN WEBSITE**. Within a minute you see
+    the pictures from their site, all ticked. Untick any you don't want and press **SAVE n PICTURES TO …**.
+45. Close the window: the pictures are in that dentist's folder, category Dentist, each saying where it came from.
+46. Open a project for that client, go to **REVIEW IMAGES** and press **ADD n PICTURES FROM …'S FOLDER**. The pictures
+    are now in the project without scanning the website again.
+
+When all 46 steps match, Phases 2 and 3 are accepted. Tell Claude "Phase 2 accepted" (or the step numbers that didn't match).
