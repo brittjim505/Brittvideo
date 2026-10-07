@@ -23,3 +23,5 @@ Never change approved business rules without asking him. Locked decisions: Stand
 ## Phases
 1–3 done (foundation, sales, Builder); 3.0.1 adds website pictures + business folders (Dentists/Facilities/Attorneys/Others). Next: 4 production provider · 5 delivery/hosting · 6 communications ·
 7 Premier scheduling · 8 Square live payments. See `docs/ARCHITECTURE.md`.
+Resale (decided 2026-10-07): HOSTED service for other operators — see `docs/HOSTED_RESALE_PLAN.md`. Keep new work
+"buyer-ready": nothing owner-specific hard-coded (name, phone, city, prices, wording); it comes from Settings.
