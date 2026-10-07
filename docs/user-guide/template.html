@@ -1,0 +1,67 @@
+<!doctype html><html><head><meta charset="utf-8"><title>BrittVideo Desk — User Guide</title>
+<style>
+@page { size: Letter; margin: 0.7in 0.75in 0.8in; }
+:root { --ink:#14213d; --muted:#4b5563; --green:#15803d; --blue:#1d4ed8; --line:#d1d5db; --soft:#f3f4f6; }
+* { box-sizing: border-box; }
+body { font-family: "Inter","Helvetica Neue",Arial,sans-serif; color: var(--ink); font-size: 14.5pt; line-height: 1.5; margin: 0; }
+p { margin: 0 0 10pt; }
+h1,h2 { line-height: 1.2; }
+.cover { height: 9.3in; display:flex; flex-direction:column; justify-content:center; align-items:flex-start; page-break-after: always;
+  background: linear-gradient(160deg,#0f172a,#1e3a8a); color:#fff; margin: -0.7in -0.75in 0; padding: 1in; }
+.cover .logo { width:70px; height:70px; border-radius:16px; background:#0b1220; color:#22c55e; font-size:36pt; display:flex; align-items:center; justify-content:center; }
+.cover .brand { font-size: 20pt; font-weight:700; margin-top: 18pt; opacity:.9; }
+.ctitle { font-size: 54pt; margin: 4pt 0 10pt; }
+.csub { font-size: 18pt; opacity:.9; }
+.cmeta { margin-top: 40pt; font-size: 13pt; opacity: .85; border-top:1px solid rgba(255,255,255,.3); padding-top: 12pt; }
+.part { page-break-before: always; padding: 1.4in 0 0.4in; border-bottom: 4px solid var(--green); margin-bottom: 18pt; }
+.part .partlabel { font-size: 12pt; letter-spacing: .2em; color: var(--green); font-weight: 800; }
+.part h1 { font-size: 34pt; margin: 6pt 0 10pt; }
+.lead { font-size: 15.5pt; color: var(--muted); }
+h2 { font-size: 21pt; margin: 26pt 0 10pt; page-break-after: avoid; display:flex; align-items:center; gap:12pt; }
+h2 .num { background: var(--ink); color:#fff; border-radius: 10px; min-width: 38pt; height: 38pt; display:inline-flex; align-items:center; justify-content:center; font-size: 17pt; }
+h2.nonum { border-bottom: 2px solid var(--line); padding-bottom: 6pt; display:block; }
+h2 + p.lead { margin-top: -2pt; }
+ol.steps { list-style: none; padding: 0; margin: 6pt 0 12pt; }
+ol.steps li { display:flex; gap: 12pt; align-items:flex-start; margin: 0 0 9pt; page-break-inside: avoid; }
+ol.steps .sn { flex: 0 0 auto; background: var(--green); color:#fff; font-weight:800; border-radius: 999px; min-width: 30pt; height: 30pt; display:inline-flex; align-items:center; justify-content:center; font-size: 13pt; margin-top: -2pt; }
+ol.plain li, ul.bul li { margin-bottom: 6pt; }
+b.btn { background:#e7f5ec; border:1px solid #9bd3b0; color:#0f5132; padding: 0 5pt; border-radius: 5px; font-size: .9em; letter-spacing:.02em; white-space: nowrap; }
+b.menu { color: var(--blue); }
+i.see { color: #374151; }
+figure { margin: 8pt auto 16pt; page-break-inside: avoid; text-align:center; }
+figure img { width: auto; max-width: 100%; max-height: 5.3in; border: 1px solid var(--line); border-radius: 8px; box-shadow: 0 2px 8px rgba(0,0,0,.08); }
+figure.half img { max-height: 4.6in; }
+figcaption { font-size: 12pt; color: var(--muted); margin-top: 5pt; }
+.box { border-radius: 10px; padding: 10pt 14pt; margin: 8pt 0 14pt; page-break-inside: avoid; font-size: 13.5pt; }
+.box b:first-child { display:block; margin-bottom: 2pt; }
+.box.tip { background: #eff6ff; border-left: 6px solid var(--blue); }
+.box.warn { background: #fffbeb; border-left: 6px solid #d97706; }
+.box.help { background: #ecfdf5; border-left: 6px solid var(--green); }
+h2, h2 + p, h2 + p.lead { break-after: avoid; } .check { break-before: auto; border: 2px dashed #9ca3af; border-radius: 10px; padding: 10pt 14pt; margin: 12pt 0 22pt; page-break-inside: avoid; font-size: 12.5pt; background: #fafafa; }
+.cq { font-weight: 600; margin-bottom: 8pt; }
+.cb { display:inline-block; width: 14pt; height: 14pt; border: 2px solid #374151; border-radius: 3px; vertical-align: -2pt; }
+.lines .l { border-bottom: 1px solid #9ca3af; height: 24pt; }
+.check.big .l { height: 30pt; }
+table.ref { width: 100%; border-collapse: collapse; margin: 6pt 0 16pt; font-size: 13pt; page-break-inside: auto; }
+table.ref th { text-align: left; background: var(--ink); color: #fff; padding: 6pt 9pt; }
+table.ref td { border-bottom: 1px solid var(--line); padding: 6pt 9pt; vertical-align: top; }
+table.ref tr { page-break-inside: avoid; }
+table.ref td:first-child { font-weight: 700; width: 34%; }
+.flow { display:flex; align-items:center; gap: 6pt; margin: 8pt 0 16pt; flex-wrap: nowrap; }
+.flow div { flex: 1; background: var(--soft); border: 2px solid var(--line); border-radius: 10px; padding: 8pt 6pt; text-align:center; font-weight: 700; font-size: 12pt; }
+.flow div b { display:block; color: var(--green); font-size: 16pt; }
+.flow span { color: var(--muted); font-size: 16pt; }
+#toc { columns: 2; column-gap: 28pt; font-size: 13pt; }
+#toc .tp { font-weight: 800; color: var(--green); margin: 8pt 0 2pt; break-after: avoid; letter-spacing: .03em; text-transform: uppercase; font-size: 11pt; }
+#toc .tc { margin: 0 0 3pt; } #toc .tc span { display:inline-block; min-width: 22pt; font-weight:700; }
+.pb { page-break-after: always; }
+</style></head><body>
+{{BODY}}
+<script>
+const toc = document.getElementById('toc'); let html = '';
+document.querySelectorAll('section.part h1, h2[id]').forEach(el => {
+  if (el.tagName === 'H1') html += '<div class="tp">' + el.textContent + '</div>';
+  else html += '<div class="tc"><span>' + el.querySelector('.num').textContent + '</span>' + el.textContent.replace(el.querySelector('.num').textContent, '') + '</div>';
+});
+toc.innerHTML = html;
+</script></body></html>
