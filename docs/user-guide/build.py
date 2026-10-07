@@ -39,11 +39,11 @@ def pagebreak(): raw('<div class="pb"></div>')
 
 # ------------------------------------------------------------------ COVER
 raw('''<section class="cover">
-<div class="logo">▶</div>
-<div class="brand">BrittVideo Desk</div>
-<h1 class="ctitle">User Guide</h1>
-<p class="csub">Step by step, from your very first sign-in<br>to delivering a finished Video Kit</p>
-<div class="cmeta">Version 3.0.1 · October 2026<br><b>Owner test edition</b> — please mark corrections in the boxes at the end of each chapter</div>
+<img class="clogo" src="img/logo.png">
+<div class="cbar"></div>
+<h1 class="ctitle">Desk User Guide</h1>
+<p class="csub">Step by step, from your very first sign-in to delivering finished videos</p>
+<div class="cmeta">Version 3.1 · October 2026 · <b>Owner test edition</b><br>Please mark corrections in the boxes at the end of each chapter</div>
 </section>''')
 
 # ------------------------------------------------------------------ HOW TO USE
@@ -52,7 +52,7 @@ bullets(
     'Do the steps **in order**, one at a time. Each step has a number.',
     'Words in **BOLD BUTTONS** are the exact buttons on the screen. Words like [Prospects] are names in the menu. Words in *italics* are what you should see.',
     'The pictures come from a brand-new, empty Desk. The business in them, *Sunrise Family Dental*, is made up for this guide. Its website address in the pictures (*127.0.0.1:4000*) is a test address — with real clients you will see their real website.',
-    'At the end of each chapter there is a box. Tick whether everything matched, and write down anything that was wrong, confusing or missing. Those notes become the corrections for the resale edition.',
+    'At the end of each chapter there is a box. Tick whether everything matched, and write down anything that was wrong, confusing or missing. Send those notes to Claude and the Desk and this guide will be corrected.',
     'Use the **TEST** copy of the Desk while you learn. Nothing you do there charges real money or contacts real people.',
 )
 tip('If anything ever goes wrong, press **GET SUPPORT** at the top left. The Desk writes up the technical details for you. You never need to figure out what broke.', 'help', 'If you get stuck')
@@ -63,9 +63,11 @@ raw('''<div class="flow">
 <div><b>1</b>Find a prospect</div><span>→</span><div><b>2</b>Show a demo</div><span>→</span><div><b>3</b>They become a client</div><span>→</span>
 <div><b>4</b>Build the Video Kit</div><span>→</span><div><b>5</b>Approve &amp; deliver</div></div>''')
 p('A *prospect* is a business you hope to sell to. When they buy, they become a *client*, and the Desk creates their *project* automatically. A project is the set of videos you make for them.')
-p('The Desk sells two packages, and the prices can be changed in Settings:')
-bullets('**Standard** — $597 one time: a website video, social videos in three shapes, and an email video.',
-        '**Premier** — $997 plus $149 a month: the same kit, plus hosting, a monthly report and a fresh video every quarter.')
+p('The Desk sells three products. Prices can be changed in Settings:')
+raw('''<table class="ref"><tr><th>Product</th><th>What the client gets</th></tr>
+<tr><td>Standard — $597 one time</td><td>Five videos: a website video up to 90 seconds in the shape the client prefers (landscape, square or portrait); two social media videos, one portrait and one landscape; a thank-you video; and an email video.</td></tr>
+<tr><td>Premier — $997 plus $149 a month</td><td>The same five videos, plus hosting, a monthly report and a fresh video every quarter.</td></tr>
+<tr><td>One-Off Video — $197</td><td>One video for a single purpose: thank-you, follow-up, review or referral request, promotion, announcement, seasonal or email.</td></tr></table>''')
 
 raw('<h2 class="nonum">Contents</h2><div id="toc"></div>')
 pagebreak()
@@ -130,11 +132,11 @@ part('Set up your Desk (do this once)', 'Before your first sale: check your pric
 
 chapter('Check your prices', 'Only the Super User can change prices.')
 steps('Open [Settings]. The **Pricing** tab opens first.',
-      'Under *Default prices* you see the Premier Video Kit, Quick Video, Standard Video Kit and Premier Membership prices.',
+      'Under *Default prices* you see the Standard Video Kit, Premier Video Kit, Premier Membership (per month) and One-Off Video prices.',
       'To change a price, type the new number, add a **Note** (why you changed it), press **SAVE NEW DEFAULT PRICES**, then **YES, SAVE NEW PRICES**.')
 shot('05_settings_pricing', 'Settings → Pricing. On the right is exactly what prospects see.')
 tip('New prices apply to future sales only. Every past sale, agreement and Premier membership keeps the price it was sold at. The *Price history* list on the right records every change.')
-tip('Quick Video has no set price on purpose. You type the agreed price on each sale.', 'tip', 'Note')
+tip('The One-Off Video price ($197) is used for every One-Off sale. For a single sale you can still agree a different price (Chapter 16).', 'tip', 'Note')
 check()
 
 chapter('Add a helper or your developer (optional)', 'Everyone gets their own login. Never share yours.')
@@ -167,7 +169,7 @@ check()
 chapter('Make your first backup', 'The Desk backs itself up every night. Making one now clears the orange *Something needs your attention* pill on a new Desk.')
 steps('Open [System Health].', 'Press **MAKE A BACKUP NOW**. You see *Backup created and checked.*',
       'Refresh the page (or open another page). The top pill turns green: *Work Saved & Protected*.')
-shot('45_health', 'System Health after the first backup.')
+shot('47_health', 'System Health after the first backup.')
 check()
 
 # ================================================================== PART 3
@@ -262,7 +264,7 @@ part('Your new client', 'Where a new client shows up, and what you can see and c
 chapter('The new client on your Command Center')
 p('After a sign-up or a recorded sale, the Command Center shows the client under *Needs attention today* as *New Client — Ready to Start*, and the *Revenue snapshot* includes the sale.')
 shot('25_command_center_client', 'A new client waiting to start.')
-steps('Press **OPEN PROJECT**. The project page lists the four videos (Website, Social A, Social B, Email), each *Not built yet*.')
+steps('Press **OPEN PROJECT**. The project page lists the five videos (Website Video, Social Portrait, Social Landscape, Thank-You Video, Email Video), each *Not built yet*.')
 shot('26_project', 'The project page: approvals, production and saved versions.')
 p('*Saved versions (checkpoints)*: the Desk saves a version at every important step. **RESTORE** goes back to one. Restoring never invents an approval.')
 check()
@@ -310,19 +312,21 @@ check()
 chapter('Step 4 — Choose the story')
 steps('Choose a **Video story**. Each industry has its own list (dentists, for example: *New Patient Experience*, *Meet the Dentist*, *Office Tour*…).',
       'Choose a **Tone** (*Warm & Emotional*, *Professional*, *Friendly*, *Educational*, *Energetic* or *Premium / Cinematic*).',
-      'Choose the **Website Video length** — 30, 60, 90 or 120 seconds — and the **Creation platform** you will produce it in (for example *HeyGen*).',
+      'Choose the **Website Video length** — 30, 60 or 90 seconds.',
+      'Choose the **Website Video shape** the client prefers: *Landscape 16:9*, *Square 1:1* or *Portrait 9:16*.',
+      'Choose the **Creation platform** you will produce it in (for example *HeyGen*).',
       'Press **NEXT: BUILD VIDEOS →**.')
-shot('35_story', 'Step 4. Social A and Social B are 30 seconds each; the Email Video is 15 seconds.')
+shot('35_story', 'Step 4. The two social videos and the Thank-You Video are 30 seconds each; the Email Video is 15 seconds.')
 check()
 
-chapter('Step 5 — Build the four videos')
+chapter('Step 5 — Build the five videos')
 steps('Check the summary (story, tone, length, platform, facts kept).',
-      'Press **BUILD 4 VIDEOS**. In a few seconds the Desk writes every scene for the Website Video, Social A, Social B and the Email Video.')
+      'Press **BUILD 5 VIDEOS**. In a few seconds the Desk writes every scene for the Website Video, Social Portrait, Social Landscape, Thank-You Video and Email Video.')
 shot('36_build', 'Step 5, ready to build.')
 check()
 
 chapter('Step 6 — Review the scenes')
-steps('Tabs at the top show each video and how many scenes are approved (for example *Website Video · 0/12*).',
+steps('Five tabs at the top show each video and how many scenes are approved (for example *Website Video · 0/12*, *Thank-You Video · 0/6*).',
       'Read each scene: its *Narration* (the words spoken) and *Visual* (what the picture shows).',
       'To change the words, press **REWRITE SCENE**, edit **Narration — the words spoken**, and press **SAVE SCENE**. The word counter tells you how many words fit the scene.',
       'To change a scene\'s picture, press **CHANGE IMAGE**.',
@@ -345,7 +349,7 @@ steps('Press **DOWNLOAD COMPLETE VIDEO KIT**. A zip file is saved to your Downlo
       'After you send the finished work to the client, choose **How was it delivered?** (for example *Emailed download link*), add a **Note** if you like, and press **RECORD DELIVERY**.',
       'It appears under *Delivery history*.')
 shot('42_delivered', 'Step 8 after recording the delivery.')
-p('**What is in the kit:** one script file for every video and shape (Website; Social A and B in Landscape 16:9, Vertical 9:16 and Square 1:1; Email), a folder of the pictures used, and a file listing where every fact and picture came from.')
+p('**What is in the kit:** one script file for each of the five videos, each named with its shape (for example *Social Portrait … 9x16 Portrait*), a folder of the pictures used, and a file listing where every fact and picture came from.')
 check()
 
 chapter('Producing the actual videos (today)')
@@ -358,15 +362,22 @@ check()
 # ================================================================== PART 7
 part('Everyday tools')
 
-chapter('Quick Video — one short video', 'A single purpose-built video without the full kit: thank-you, follow-up, review request, referral request, promotion, announcement, seasonal or email video.')
-steps('Open [Quick Video] (or **BUILD A QUICK VIDEO** on the Command Center).',
-      'Choose **Who is it for?** (a client or prospect), the **Purpose**, the **Delivery** (*Email*, *Text / SMS Link* or *Website / Social*), the **Length** and the **Tone**.',
+chapter('One-Off Video — sell it and build it', 'A single video for one purpose — $197.')
+p('**Selling it:** a prospect can choose *One-Off Video* in any demo (iPad, Zoom or Demo Link), or you can record the sale yourself:')
+steps('Press **RECORD A SALE**. Fill in the business, choose **One-Off Video** under *2. Package*, type **Agreed by (full name)** and tick that they accepted.',
+      'Press **CREATE SALE**, then record the payment (or **DO THIS LATER**).')
+shot('43_oneoff_sale', 'Recording a One-Off Video sale.')
+p('**Building it:**')
+steps('Open the new project (Command Center **OPEN PROJECT**, or [Projects]). It says *One-Off Video — Ready to Start*.',
+      'Press **BUILD THIS VIDEO**. The Quick Video page opens with the client already chosen.',
+      'Choose the **Purpose**, the **Delivery** (*Email*, *Text / SMS Link* or *Website / Social*), the **Length** and the **Tone**.',
       'Optionally personalize it: **Customer first name**, **Service provided**, **Provider / employee name**, **Special message** (and **Promotion / offer details** for a promotion).',
-      'Press **BUILD QUICK VIDEO**.',
+      'Press **BUILD QUICK VIDEO**. The script is written into the One-Off project.',
       'Read the narration. Change words and press **SAVE NARRATION** if needed.',
       'Press **APPROVE SCRIPT**, then **DOWNLOAD SCRIPT**.')
-shot('43_quick_form', 'Quick Video.')
-shot('44_quick_result', 'The Quick Video script, ready to approve.')
+shot('44_oneoff_project', 'A sold One-Off Video waiting to be built.')
+shot('46_quick_result', 'The script, ready to approve.')
+tip('You can also open [Quick Video] directly (or **BUILD A QUICK VIDEO** on the Command Center) to make a short video for any client — for example an extra video for a Standard or Premier client.')
 check()
 
 chapter('Image Library — more you can do')
@@ -379,7 +390,7 @@ check()
 
 chapter('Search')
 steps('Click the search box at the top and type part of a name (for example *sun*).', 'Press a result to jump to that client, prospect or project.')
-shot('47_search', 'Search results.', 'half')
+shot('49_search', 'Search results.', 'half')
 check()
 
 chapter('System Health and GET SUPPORT')
@@ -387,7 +398,7 @@ p('[System Health] shows whether your work is saved, storage, backups, automatic
 steps('If something looks wrong, press **GET SUPPORT** (top left on every screen).',
       'Type what you were trying to do (optional) and press **PREPARE SUPPORT REPORT**.',
       'Press **SEND FOR SUPPORT** (or **DOWNLOAD REPORT** to save it). Passwords, card details and keys are never included.')
-shot('46_support', 'Get Support.', 'half')
+shot('48_support', 'Get Support.', 'half')
 check()
 
 # ================================================================== PART 8
@@ -422,13 +433,9 @@ raw('<table class="ref"><tr><th>What you see</th><th>What to do</th></tr>' + ''.
     ('A demo shows a dark box instead of a video', 'Add a **Video link** to that item in [Settings] → **Demo Library**.'),
     ('Anything else', 'Press **GET SUPPORT** and describe what you were doing.')]) + '</table>')
 
-raw('<h2 class="nonum">Corrections already spotted while making this guide</h2>')
-p('These were noticed while taking the pictures. They are listed so you can confirm them; they will be fixed before the resale edition.')
-bullets('The sign-up *Welcome* screen says *Jim reviews your website…* and the demo footer says *Albuquerque, New Mexico*. For buyers, these must come from each owner\'s own Settings.',
-        'The demo *Examples* show dark placeholder boxes until video links are added in the Demo Library.',
-        'In Settings → Integrations, one key is labelled *anthropic.api_key*. It should read *AI writer key (optional)*.',
-        'After **MAKE A BACKUP NOW**, the top pill stays orange until the page is refreshed.',
-        'Pictures named from their file can start with a small letter (for example *hero*).')
+raw('<h2 class="nonum">Good to know in this version</h2>')
+bullets('The demo *Examples* show dark placeholder boxes until you add video links in [Settings] → **Demo Library**.',
+        'Card payments are in test mode: use **PAY $… WITH TEST CARD** in demos, and record real checks or cash with **RECORD PAYMENT**.')
 
 raw('<h2 class="nonum">My overall notes</h2>')
 raw('<div class="check big"><div class="lines">' + '<div class="l"></div>' * 18 + '</div></div>')

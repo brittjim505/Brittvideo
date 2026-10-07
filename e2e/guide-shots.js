@@ -36,7 +36,7 @@ const fails = [];
     await pg.getByRole('button', { name: 'A++', exact: true }).click(); await shot('04_text_xl');
     await pg.getByRole('button', { name: 'A+', exact: true }).click();
   });
-  await step('signin', async () => { await go(''); await pg.getByLabel('Email').fill('alex@example.com'); await pg.getByLabel('Password').fill(PW);
+  if (process.env.ONLY) await step('signin', async () => { await go(''); await pg.getByLabel('Email').fill('alex@example.com'); await pg.getByLabel('Password').fill(PW);
     await pg.getByRole('button', { name: 'SIGN IN', exact: true }).click(); await pg.waitForSelector('text=Command Center'); });
   // ---------- Settings ----------
   await step('pricing', async () => { await go('/settings'); await pg.waitForSelector('text=Default prices'); await shot('05_settings_pricing', { full: true }); });
@@ -132,12 +132,12 @@ const fails = [];
     const folderBtn = pg.getByRole('button', { name: /FOLDER$/ });
     if (await folderBtn.count()) { await shot('33_images_folder_button'); await folderBtn.click(); await pg.waitForTimeout(800); }
     await shot('34_review_images', { full: true });
-    await pg.getByRole('button', { name: 'NEXT: CHOOSE STORY →', exact: true }).click(); await pg.waitForSelector('text=YOU ARE HERE'); await shot('35_story', { full: true });
+    await pg.getByRole('button', { name: 'NEXT: CHOOSE STORY →', exact: true }).click(); await pg.waitForSelector('text=YOU ARE HERE'); await pg.getByLabel('Website Video shape').selectOption('16x9'); await shot('35_story', { full: true });
     await pg.getByRole('button', { name: 'NEXT: BUILD VIDEOS →', exact: true }).click(); await pg.waitForTimeout(500); await shot('36_build');
-    await pg.getByRole('button', { name: 'BUILD 4 VIDEOS', exact: true }).click(); await pg.waitForSelector('text=APPROVE ALL', { timeout: 60000 }); await shot('37_review_scenes');
+    await pg.getByRole('button', { name: 'BUILD 5 VIDEOS', exact: true }).click(); await pg.waitForSelector('text=APPROVE ALL', { timeout: 60000 }); await shot('37_review_scenes');
     await pg.getByRole('button', { name: 'REWRITE SCENE', exact: true }).nth(1).click(); await pg.waitForTimeout(400); await shot('38_rewrite_scene');
     await pg.getByRole('button', { name: 'SAVE SCENE', exact: true }).click(); await pg.waitForTimeout(700);
-    for (const tab of ['Website Video', 'Social A', 'Social B', 'Email Video']) {
+    for (const tab of ['Website Video', 'Social Portrait', 'Social Landscape', 'Thank-You Video', 'Email Video']) {
       await pg.getByRole('button', { name: new RegExp('^' + tab) }).click(); await pg.waitForTimeout(300);
       const all = pg.getByRole('button', { name: /APPROVE ALL/ }); if (await all.count()) { await all.click(); await pg.waitForTimeout(900); }
     }
@@ -148,21 +148,31 @@ const fails = [];
     await d.saveAs(S + 'kit.zip');
     await pg.waitForTimeout(1800); await pg.getByRole('button', { name: 'RECORD DELIVERY', exact: true }).click(); await pg.waitForSelector('text=Delivery history'); await shot('42_delivered', { full: true });
   });
-  // ---------- Quick Video ----------
+  // ---------- One-Off Video: sell it, then build it ----------
   await step('quick', async () => {
-    await go('/quick'); await pg.getByLabel('Who is it for?').selectOption({ label: 'Sunrise Family Dental' });
-    await pg.getByLabel('Purpose').selectOption('Review Request'); await pg.getByLabel('Length').selectOption('30'); await pg.getByLabel('Customer first name').fill('Rosa');
-    await shot('43_quick_form', { full: true });
-    await pg.getByRole('button', { name: 'BUILD QUICK VIDEO', exact: true }).click(); await pg.waitForSelector('text=SAVE NARRATION'); await shot('44_quick_result', { full: true });
+    await go('/sale'); await pg.waitForSelector('text=Record a Sale');
+    await pg.getByLabel('Business / facility name').fill('Duke City Plumbing'); await pg.getByLabel('Industry').selectOption('other');
+    await pg.getByLabel('Type of business').fill('Plumbing').catch(() => {});
+    await pg.getByText('One-Off Video', { exact: true }).click();
+    await pg.getByLabel('Agreed by (full name)').fill('Sam Ortiz'); await pg.getByLabel(/accepted the/).check();
+    await shot('43_oneoff_sale', { full: true });
+    await pg.getByRole('button', { name: 'CREATE SALE', exact: true }).click();
+    await pg.getByLabel('How was it paid?').fill('Check #2207'); await pg.getByRole('button', { name: /RECORD PAYMENT OF/ }).click(); await pg.waitForSelector('text=Paid.');
+    await go('/projects'); await pg.getByRole('link', { name: /Duke City Plumbing/ }).first().click(); await pg.waitForSelector('text=One-Off Video — Ready to Start');
+    await shot('44_oneoff_project');
+    await pg.getByRole('link', { name: 'BUILD THIS VIDEO' }).click(); await pg.waitForSelector('text=Quick Video — Build One Video');
+    await pg.getByLabel('Purpose').selectOption('Thank You After Service'); await pg.getByLabel('Length').selectOption('30'); await pg.getByLabel('Customer first name').fill('Rosa');
+    await shot('45_quick_form', { full: true });
+    await pg.getByRole('button', { name: 'BUILD QUICK VIDEO', exact: true }).click(); await pg.waitForSelector('text=SAVE NARRATION'); await shot('46_quick_result', { full: true });
   });
   // ---------- Health and Support ----------
   await step('health', async () => {
     await go('/health'); await pg.waitForSelector('text=Backups');
     const mk = pg.getByRole('button', { name: 'MAKE A BACKUP NOW' }); if (await mk.count()) { await mk.click(); await pg.waitForSelector('text=Backup created and checked.'); }
-    await shot('45_health', { full: true });
+    await shot('47_health', { full: true });
     await pg.getByRole('button', { name: 'GET SUPPORT' }).first().click(); await pg.getByLabel(/What were you trying to do/).fill('The Builder would not open for Sunrise Family Dental.');
-    await pg.getByRole('button', { name: 'PREPARE SUPPORT REPORT' }).click(); await pg.waitForSelector('text=SEND FOR SUPPORT'); await shot('46_support');
+    await pg.getByRole('button', { name: 'PREPARE SUPPORT REPORT' }).click(); await pg.waitForSelector('text=SEND FOR SUPPORT'); await shot('48_support');
   });
-  await step('search', async () => { await pg.keyboard.press('Escape'); await go(''); await pg.getByPlaceholder('Search clients, prospects, projects').fill('sun'); await pg.waitForTimeout(900); await shot('47_search'); });
+  await step('search', async () => { await pg.keyboard.press('Escape'); await go(''); await pg.getByPlaceholder('Search clients, prospects, projects').fill('sun'); await pg.waitForTimeout(900); await shot('49_search'); });
   console.log('ERRORS', errs); console.log('FAILS', JSON.stringify(fails, null, 1)); await b.close();
 })();
