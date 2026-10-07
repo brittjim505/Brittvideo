@@ -119,11 +119,13 @@ describe('building the four videos (W5, K14)', () => {
     expect(b.status.completeVideoKitApproved).toBe(false);
   });
 
-  it('120-second website = 24 scenes; lengths outside 30/60/90/120 are refused', async () => {
+  it('90-second website = 18 scenes in the shape the client chose; lengths outside 30/60/90 and unknown shapes are refused', async () => {
     const c = await jim();
-    const r = await c.post(`/api/projects/${projectId}/build`, { story: 'Office Tour', tone: 'Friendly', websiteSecs: 120, platform: 'HeyGen' });
-    expect(r.json.status.deliverables.find((d: any) => d.kind === 'website').sceneCount).toBe(24);
-    expect((await c.post(`/api/projects/${projectId}/build`, { story: 'Office Tour', tone: 'Friendly', websiteSecs: 45, platform: 'HeyGen' })).status).toBe(400);
+    const r = await c.post(`/api/projects/${projectId}/build`, { story: 'Office Tour', tone: 'Friendly', websiteSecs: 90, websiteFormat: '1x1', platform: 'HeyGen' });
+    const web = r.json.status.deliverables.find((d: any) => d.kind === 'website');
+    expect(web.sceneCount).toBe(18); expect(web.formats).toEqual(['1x1']);
+    for (const bad of [{ websiteSecs: 45 }, { websiteSecs: 120 }, { websiteSecs: 60, websiteFormat: '4x3' }])
+      expect((await c.post(`/api/projects/${projectId}/build`, { story: 'Office Tour', tone: 'Friendly', platform: 'HeyGen', websiteSecs: 60, ...bad })).status).toBe(400);
     expect((await c.post(`/api/projects/${projectId}/build`, { story: 'Made Up Story', tone: 'Friendly', websiteSecs: 60, platform: 'HeyGen' })).status).toBe(400);
     await c.post(`/api/projects/${projectId}/build`, { story: 'New Patient Experience', tone: 'Friendly', websiteSecs: 60, platform: 'HeyGen' });
   });
@@ -178,8 +180,9 @@ describe('approval → download → delivery (W16, N7, N9, N11, T15)', () => {
     expect(r.statusCode).toBe(200);
     expect(r.headers['content-disposition']).toMatch(/Sunrise_Family_Dental_BrittVideo_Complete_Kit\.zip/);
     const names = zipNames(r.rawPayload);
-    for (const n of ['00_READ_ME.txt', 'Sunrise_Family_Dental_Website_60sec.txt', 'Sunrise_Family_Dental_Social_A_30sec_16x9_Landscape.txt', 'Sunrise_Family_Dental_Social_A_30sec_9x16_Vertical.txt',
-      'Sunrise_Family_Dental_Social_A_30sec_1x1_Square.txt', 'Sunrise_Family_Dental_Social_B_30sec_1x1_Square.txt', 'Sunrise_Family_Dental_Email_15sec.txt', 'Sunrise_Family_Dental_Image_Sources.txt']) expect(names).toContain(n);
+    for (const n of ['00_READ_ME.txt', 'Sunrise_Family_Dental_Website_Video_60sec_16x9_Landscape.txt', 'Sunrise_Family_Dental_Social_Portrait_30sec_9x16_Portrait.txt',
+      'Sunrise_Family_Dental_Social_Landscape_30sec_16x9_Landscape.txt', 'Sunrise_Family_Dental_Thank-You_Video_30sec_16x9_Landscape.txt', 'Sunrise_Family_Dental_Email_Video_15sec_16x9_Landscape.txt',
+      'Sunrise_Family_Dental_Image_Sources.txt']) expect(names).toContain(n);
     expect(names.some((n) => /^images\/\d\d_.*\.jpg$/.test(n))).toBe(true);
     expect(r.rawPayload.toString('latin1')).toContain('SOURCE: http://127.0.0.1');                // grounding travels with the kit
     expect(r.rawPayload.toString('utf8')).toMatch(/owner-written line about gentle care\.\S*\nSOURCE: written by the owner/);

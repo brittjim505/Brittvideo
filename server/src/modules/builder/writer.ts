@@ -11,13 +11,13 @@ export interface WriterFact { id: string; text: string }
 export interface WriterImage { id: string; title: string; alt?: string | null }
 export interface WriterInput {
   businessName: string; industry: string; businessType?: string | null; story: string; tone: string; websiteUrl?: string | null;
-  facts: WriterFact[]; images: WriterImage[]; websiteSecs: number;
+  facts: WriterFact[]; images: WriterImage[]; websiteSecs: number; websiteFormat?: string;
 }
 export interface SceneDraft { name: string; start_s: number; end_s: number; visual: string; narration: string; factIds: string[]; imageId: string | null }
-export interface KitDraft { website: SceneDraft[]; social_a: SceneDraft[]; social_b: SceneDraft[]; email: SceneDraft[]; writtenBy: string; note?: string }
+export interface KitDraft { website: SceneDraft[]; social_a: SceneDraft[]; social_b: SceneDraft[]; thank_you: SceneDraft[]; email: SceneDraft[]; writtenBy: string; note?: string }
 
 export const SCENE_SECONDS = 5;
-export const sceneCounts = (websiteSecs: number) => ({ website: Math.max(1, Math.ceil(websiteSecs / SCENE_SECONDS)), social_a: 6, social_b: 6, email: 3 });
+export const sceneCounts = (websiteSecs: number) => ({ website: Math.max(1, Math.ceil(websiteSecs / SCENE_SECONDS)), social_a: 6, social_b: 6, thank_you: 6, email: 3 });
 
 const WORDS_PER_SCENE = 16;
 /** Split facts into speakable phrases of about one scene each, keeping the source's own words. */
@@ -55,13 +55,41 @@ export function pickImage(text: string, images: WriterImage[], prev: string | nu
   return (pool.length ? pool : images)[i % (pool.length || images.length)].id;
 }
 
-function visualFor(role: 'opening' | 'moment' | 'closing' | 'hook', imageTitle: string | null, vertical: boolean) {
+/** How to compose a shot for the video's shape. */
+const FRAME: Record<string, string> = {
+  '16x9': '',
+  '9x16': ' Compose for a vertical 9:16 frame with the subject centered.',
+  '1x1': ' Compose for a square 1:1 frame with the subject centered.',
+};
+function visualFor(role: 'opening' | 'moment' | 'closing' | 'hook', imageTitle: string | null, format: string) {
   const subject = imageTitle ? `the approved image “${imageTitle}”` : 'approved client imagery';
-  const frame = vertical ? ' Keep the subject centered so the 16:9, 9:16 and 1:1 versions all crop cleanly.' : '';
+  const frame = FRAME[format] ?? '';
   if (role === 'opening') return `Slow establishing push-in using ${subject}; warm, natural light; one continuous shot; no on-screen text.${frame}`;
   if (role === 'hook') return `Attention-grabbing first frame built from ${subject}; gentle movement; leave clean space for a caption added in editing.${frame}`;
   if (role === 'closing') return `Closing hero view using ${subject} with a slow pull-back; clean space for logo and call to action added in editing.${frame}`;
   return `Gentle, authentic moment using ${subject} as the reference; subtle camera movement; one continuous shot.${frame}`;
+}
+
+/**
+ * The Thank-You Video: a warm thank-you the business sends its customers after a visit. It uses BrittVideo's fixed,
+ * claim-free wording (no facts about the business are stated), so it is always written from this template.
+ */
+export function thankYouScenes(inp: WriterInput): SceneDraft[] {
+  const lines: [string, string, 'opening' | 'moment' | 'closing'][] = [
+    ['Thank You', `Thank you for choosing ${inp.businessName}.`, 'opening'],
+    ['We Appreciate You', 'We truly appreciate the opportunity to serve you.', 'moment'],
+    ['Your Trust', 'Your trust means a great deal to our whole team.', 'moment'],
+    ['Visual Moment', '', 'moment'],
+    ['Here to Help', 'If you ever have a question, we are always here to help.', 'moment'],
+    ['See You Again', `${inp.businessName}. We look forward to seeing you again.`, 'closing'],
+  ];
+  let prev: string | null = null;
+  return lines.map(([name, narration, role], i) => {
+    const imageId = pickImage(narration, inp.images, prev, i); prev = imageId;
+    const title = inp.images.find((im) => im.id === imageId)?.title ?? null;
+    return { name, start_s: i * SCENE_SECONDS, end_s: (i + 1) * SCENE_SECONDS, narration, factIds: [], imageId,
+      visual: visualFor(role, title, '16x9') + (narration ? '' : ' No narration — let the picture and music carry this moment.') };
+  });
 }
 
 const WEAK_END = new Set(['a', 'an', 'the', 'of', 'and', 'or', 'to', 'for', 'with', 'from', 'in', 'on', 'at', 'by', 'since', 'our', 'your', 'their', 'is', 'are', 'has', 'have', 'that', 'who', 'every', 'each', 'offers', 'provides', 'gives', 'includes', 'features', 'makes', 'helps']);
@@ -78,7 +106,7 @@ export function templateWriter(inp: WriterInput): KitDraft {
   const hooks = HOOKS[inp.industry] ?? HOOKS.other;
   const lines = phrases(inp.facts);
   const imgTitle = (id: string | null) => inp.images.find((i) => i.id === id)?.title ?? null;
-  const build = (n: number, opts: { opening?: string; hook?: string; closing: string; vertical: boolean; startAt: number }): SceneDraft[] => {
+  const build = (n: number, opts: { opening?: string; hook?: string; closing: string; format: string; startAt: number }): SceneDraft[] => {
     const scenes: SceneDraft[] = [];
     let li = opts.startAt, prev: string | null = null;
     // Spread any picture-only moments evenly between spoken scenes instead of bunching them at the end.
@@ -99,16 +127,17 @@ export function templateWriter(inp: WriterInput): KitDraft {
       } else { narration = ''; name = 'Visual Moment'; }
       const imageId = pickImage(narration, inp.images, prev, i); prev = imageId;
       scenes.push({ name, start_s: i * SCENE_SECONDS, end_s: (i + 1) * SCENE_SECONDS, narration, factIds,
-        visual: narration ? visualFor(role, imgTitle(imageId), opts.vertical) : visualFor('moment', imgTitle(imageId), opts.vertical) + ' No narration — let the picture and music carry this moment.', imageId });
+        visual: narration ? visualFor(role, imgTitle(imageId), opts.format) : visualFor('moment', imgTitle(imageId), opts.format) + ' No narration — let the picture and music carry this moment.', imageId });
     }
     return scenes;
   };
   const cta = hooks.cta + (inp.websiteUrl ? ` Visit ${inp.websiteUrl.replace(/^https?:\/\//, '').replace(/\/$/, '')}.` : '');
   return {
-    website: build(counts.website, { closing: cta, vertical: false, startAt: 0 }),
-    social_a: build(counts.social_a, { hook: hooks.socialA, closing: cta, vertical: true, startAt: 0 }),
-    social_b: build(counts.social_b, { hook: hooks.socialB, closing: cta, vertical: true, startAt: Math.min(4, Math.max(0, lines.length - 4)) }),
-    email: build(counts.email, { closing: cta, vertical: false, startAt: 1 }),
+    website: build(counts.website, { closing: cta, format: inp.websiteFormat ?? '16x9', startAt: 0 }),
+    social_a: build(counts.social_a, { hook: hooks.socialA, closing: cta, format: '9x16', startAt: 0 }),
+    social_b: build(counts.social_b, { hook: hooks.socialB, closing: cta, format: '16x9', startAt: Math.min(4, Math.max(0, lines.length - 4)) }),
+    thank_you: thankYouScenes(inp),
+    email: build(counts.email, { closing: cta, format: '16x9', startAt: 1 }),
     writtenBy: 'templates',
   };
 }
@@ -131,7 +160,7 @@ STRICT RULES:
 - imageId must be one of the image ids below, or null.
 FACTS: ${JSON.stringify(inp.facts)}
 IMAGES: ${JSON.stringify(inp.images.map((i) => ({ id: i.id, title: i.title, alt: i.alt })))}
-Return ONLY JSON: {"website":[${counts.website} scenes],"social_a":[6 scenes, first is a hook],"social_b":[6 scenes, a different hook and angle from social_a],"email":[3 scenes]}
+Return ONLY JSON: {"website":[${counts.website} scenes],"social_a":[6 scenes for a vertical 9:16 social video, first is a hook],"social_b":[6 scenes for a landscape 16:9 social video, a different hook and angle from social_a],"email":[3 scenes]}
 Each scene: {"name": string, "visual": string, "narration": string, "factIds": string[], "imageId": string|null}`;
   const r = await fetcher('https://api.anthropic.com/v1/messages', {
     method: 'POST',
@@ -162,6 +191,6 @@ Each scene: {"name": string, "visual": string, "narration": string, "factIds": s
         imageId: s.imageId && imageIds.has(s.imageId) ? s.imageId : pickImage(narration, inp.images, null, i) };
     });
   };
-  return { website: check(json.website, counts.website, 'Website'), social_a: check(json.social_a, 6, 'Social A', hooks.socialA), social_b: check(json.social_b, 6, 'Social B', hooks.socialB),
+  return { website: check(json.website, counts.website, 'Website'), social_a: check(json.social_a, 6, 'Social Portrait', hooks.socialA), social_b: check(json.social_b, 6, 'Social Landscape', hooks.socialB), thank_you: thankYouScenes(inp),
     email: check(json.email, 3, 'Email'), writtenBy: `ai:${model}` };
 }

@@ -19,7 +19,7 @@ const jim = async () => { const c = client(a); await c.login('jim@example.com');
 
 async function addScenes(pid: string) {
   const dels = (await db().query(`SELECT id, kind FROM deliverables WHERE project_id=$1 ORDER BY position`, [pid])).rows;
-  const counts: Record<string, number> = { website: 12, social_a: 6, social_b: 6, email: 3 };
+  const counts: Record<string, number> = { website: 12, social_a: 6, social_b: 6, thank_you: 6, email: 3 };
   for (const d of dels) for (let i = 0; i < counts[d.kind]; i++) {
     const s = { name: `${d.kind} ${i + 1}`, start_s: i * 5, end_s: i * 5 + 5, image_ref: { title: 'Entrance' }, visual: 'Slow push-in', narration: `Line ${i + 1}` };
     await db().query(`INSERT INTO scenes (deliverable_id, position, name, start_s, end_s, image_ref, visual, narration, content_hash) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9)`,

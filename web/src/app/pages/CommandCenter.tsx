@@ -56,7 +56,7 @@ export function CommandCenter() {
         <ul className="list">{d.inProgress.slice(0, 8).map((x: any) => <li key={x.project_id}>
           <div><b>{x.business_name}</b><div className="small muted">{x.title}</div></div>
           <div className="row"><Status s={x.status} /><Link className="btn small" to={`/projects/${x.project_id}`}>OPEN</Link></div></li>)}</ul>
-        <p className="help">Standard formats tracked per project: Website · Landscape 16:9 · Vertical 9:16 · Square 1:1 · Email.</p>
+        <p className="help">Each Video Kit has five videos: Website (client's shape) · Social Portrait 9:16 · Social Landscape 16:9 · Thank-You · Email.</p>
       </section>
 
       <section className="card">

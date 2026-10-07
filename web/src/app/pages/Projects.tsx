@@ -4,7 +4,7 @@ import { get, patch, post, put, when, day } from '../../shared/api';
 import { useLoad, useAction, Msg, Loading, LoadError, Status, packageLabel, Modal, Field } from '../ui';
 
 const FORMAT: Record<string, string> = { '16x9': 'Landscape 16:9', '9x16': 'Vertical 9:16', '1x1': 'Square 1:1' };
-const KIND: Record<string, string> = { video_kit: 'Video Kit', quick_video: 'Quick Video', email_video: 'Email Video', premier_quarterly: 'Premier quarterly', provider_test: 'Provider test' };
+const KIND: Record<string, string> = { video_kit: 'Video Kit', quick_video: 'One-Off / Quick Video', email_video: 'Email Video', premier_quarterly: 'Premier quarterly', provider_test: 'Provider test' };
 
 export function Projects() {
   const [status, setStatus] = useState('');
@@ -44,6 +44,8 @@ export function ProjectDetail() {
     <div className="pagehead"><div><h1>{p.business_name}</h1><p className="muted">Project #{p.project_number} · {KIND[p.kind]} · {p.title}{p.order_number ? ` · Order ${p.order_number}` : ''}</p></div>
       <div className="row"><Status s={p.status} />{p.kind === 'video_kit' && <Link className="btn next" to={`/projects/${p.id}/build`}>OPEN BUILDER</Link>}{p.client_id && <Link className="btn" to={`/clients/${p.client_id}`}>OPEN CLIENT</Link>}</div></div>
 
+    {p.kind === 'quick_video' && d.data!.deliverables.length === 0 && <div className="notice ok" style={{ marginBottom: 14 }}><b>One-Off Video — Ready to Start.</b> Press <b>BUILD THIS VIDEO</b>, choose the purpose and length, and the script is written into this project.
+      <div className="actions"><Link className="btn next" to={`/quick?client=${p.client_id}`}>BUILD THIS VIDEO</Link></div></div>}
     {p.status === 'ready_to_start' && p.kind === 'video_kit' && <div className="notice ok" style={{ marginBottom: 14 }}><b>New Client — Ready to Start.</b> Everything from the sale is here: business, website, industry and package. Press <b>OPEN BUILDER</b> to start.</div>}
     {p.kind !== 'video_kit' && d.data.deliverables[0] && <QuickScript projectId={p.id} d={d.data.deliverables[0]} st={st.deliverables[0]} settings={p.settings} onChange={reload} />}
     {production?.status === 'needs_reapproval' && <div className="notice warn" style={{ marginBottom: 14 }}><b>Changes were made after final approval.</b> Review the highlighted scenes, approve them, then approve the Complete Video Kit again.</div>}

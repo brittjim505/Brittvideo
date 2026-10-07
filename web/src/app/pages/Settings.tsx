@@ -40,7 +40,7 @@ function Pricing() {
     <section className="card">
       <h2>Default prices <span className="badge">version {d.data.version}</span></h2>
       <p className="muted small">These are the list prices for new sales. Every past sale keeps the price it was sold at.</p>
-      {Object.entries(d.data.items).map(([code, it]: any) => <Field key={code} label={`${it.label}${it.billing === 'monthly' ? ' (per month)' : ' (one-time)'}`} help={code === 'quick_video' ? 'Leave blank: Quick Video has no set price — you enter the agreed price on each sale.' : undefined}>
+      {Object.entries(d.data.items).map(([code, it]: any) => <Field key={code} label={`${it.label}${it.billing === 'monthly' ? ' (per month)' : ' (one-time)'}`} help={code === 'quick_video' ? 'One single video. You can still agree a different price on a single sale.' : undefined}>
         <input inputMode="decimal" disabled={!d.data.canEdit} value={vals[code] ?? ''} onChange={(e) => setVals({ ...vals, [code]: e.target.value })} /></Field>)}
       {d.data.canEdit ? <>
         <Field label="Note (optional)"><input value={note} onChange={(e) => setNote(e.target.value)} placeholder="Why the change" /></Field>
@@ -98,7 +98,7 @@ function Users() {
 }
 
 const SECRET_LABEL: Record<string, string> = { 'square.access_token': 'Square access token', 'square.location_id': 'Square location ID', 'square.webhook_signature_key': 'Square webhook signature key',
-  'vimeo.access_token': 'Vimeo access token', 'heygen.api_key': 'HeyGen API key', 'email.api_key': 'Email service key', 'sms.api_key': 'Text message service key' };
+  'vimeo.access_token': 'Vimeo access token', 'heygen.api_key': 'HeyGen API key', 'anthropic.api_key': 'AI writer key (optional)', 'email.api_key': 'Email service key', 'sms.api_key': 'Text message service key' };
 function Integrations() {
   const d = useLoad(() => get('/api/integrations'));
   const [val, setVal] = useState<Record<string, string>>({}); const a = useAction();

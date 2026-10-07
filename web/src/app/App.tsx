@@ -56,7 +56,9 @@ function Shell({ env }: { env: string }) {
   const nav = useNavigate(); const loc = useLocation();
   const [q, setQ] = useState(''); const [results, setResults] = useState<any[]>([]);
   const [health, setHealth] = useState<any>(null);
-  useEffect(() => { get('/api/health').then((h) => setHealth(h.summary)).catch(() => setHealth(null)); }, [loc.pathname]);
+  const [healthTick, setHealthTick] = useState(0);
+  useEffect(() => { const f = () => setHealthTick((n) => n + 1); window.addEventListener('bv:health-changed', f); return () => window.removeEventListener('bv:health-changed', f); }, []);
+  useEffect(() => { get('/api/health').then((h) => setHealth(h.summary)).catch(() => setHealth(null)); }, [loc.pathname, healthTick]);
   useEffect(() => { // Continue Working (L5)
     const label = document.title;
     put('/api/activity', { route: '/app' + loc.pathname + loc.search, label }).catch(() => {});

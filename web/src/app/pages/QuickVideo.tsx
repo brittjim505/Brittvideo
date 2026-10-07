@@ -27,7 +27,7 @@ export function QuickVideo() {
   const u = (k: string) => (e: any) => setF({ ...f, [k]: k === 'lengthSecs' ? Number(e.target.value) : e.target.value });
   const ready = f.who && (f.purpose !== 'Promotion' || f.promotionDetails.trim());
   return <>
-    <div className="pagehead"><div><h1>Quick Video — Build One Video</h1><p className="muted">One purpose-built customer video, without building the full four-video kit.</p></div></div>
+    <div className="pagehead"><div><h1>Quick Video — Build One Video</h1><p className="muted">One purpose-built customer video, without building the full five-video kit — sold as a One-Off Video.</p></div></div>
     <section className="card">
       <Field label="Who is it for?"><select value={f.who} onChange={u('who')}><option value="">— Choose a client or prospect —</option>
         <optgroup label="Clients">{(clients.data ?? []).map((c: any) => <option key={c.id} value={'c:' + c.id}>{c.business_name}</option>)}</optgroup>

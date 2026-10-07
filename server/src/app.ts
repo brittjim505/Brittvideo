@@ -229,7 +229,8 @@ export async function buildApp(pool: pg.Pool, opts: { logger?: boolean } = {}): 
   // The exact agreement text is shown before the prospect accepts it (M10).
   app.get('/api/public/demo/:kind/:token/terms', async (req) => {
     await demoCtx(req);
-    const pkg = String((req.query as any).package) === 'premier' ? 'premier' : 'standard';
+    const asked = String((req.query as any).package);
+    const pkg = (pricing.PACKAGE_ORDER as string[]).includes(asked) ? asked as pricing.PackageCode : 'standard';
     const pub = pricing.publicPackages(await pricing.currentPriceBook(pool)).find((p) => p.code === pkg)!;
     const priceText = pub.monthlyCents ? `${money(pub.oneTimeCents)} one-time + ${money(pub.monthlyCents)} per month` : `${money(pub.oneTimeCents)} one-time`;
     const text = termsText(pkg, priceText);
@@ -304,7 +305,7 @@ export async function buildApp(pool: pg.Pool, opts: { logger?: boolean } = {}): 
   app.patch('/api/projects/:id/facts/:fid', async (req) => analysis.updateFact(pool, actor(req), params(req).id, params(req).fid, body(req)));
   app.post('/api/projects/:id/images/from-folder', async (req) => siteImages.addFolderToProject(pool, actor(req), params(req).id));
   app.post('/api/projects/:id/images/:assetId', async (req) => images.setProjectImage(pool, actor(req), params(req).id, params(req).assetId, !!body(req).selected));
-  app.post('/api/projects/:id/build', async (req) => { const b = body(req); return kit.buildKit(pool, actor(req), params(req).id, { story: b.story, tone: b.tone, websiteSecs: Number(b.websiteSecs), platform: b.platform, confirmReplaceApproved: !!b.confirmReplaceApproved }); });
+  app.post('/api/projects/:id/build', async (req) => { const b = body(req); return kit.buildKit(pool, actor(req), params(req).id, { story: b.story, tone: b.tone, websiteSecs: Number(b.websiteSecs), websiteFormat: b.websiteFormat, platform: b.platform, confirmReplaceApproved: !!b.confirmReplaceApproved }); });
   app.put('/api/projects/:id/scenes/:sceneId/image', async (req) => kit.setSceneImage(pool, actor(req), params(req).id, params(req).sceneId, body(req).assetId ?? null));
   app.post('/api/projects/:id/approve-many', async (req) => {
     const a = actor(req); const items: { id: string; expectedHash: string }[] = Array.isArray(body(req).items) ? body(req).items : [];

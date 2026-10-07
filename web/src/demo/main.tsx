@@ -18,7 +18,7 @@ function Demo() {
   const [err, setErr] = useState<string | null>(null);
   const [step, setStep] = useState<'show' | 'signup' | 'pay' | 'welcome'>('show');
   const [order, setOrder] = useState<any>(null);
-  const [pkg, setPkg] = useState<'standard' | 'premier'>('standard');
+  const [pkg, setPkg] = useState<'standard' | 'premier' | 'quick_video'>('standard');
   useEffect(() => {
     if (!base) { setErr('This demo link is not complete. Please contact BrittVideo.'); return; }
     api('GET', base).then((x) => { setV(x); if (x.alreadySignedUp) api('GET', base + '/order').then((o) => { setOrder(o); setStep(o.status === 'paid' ? 'welcome' : 'pay'); }).catch(() => {}); })
@@ -89,7 +89,7 @@ function VideoEmbed({ url, title }: { url: string; title: string }) {
   </div>;
 }
 
-function Signup({ v, pkg, setPkg, onBack, onDone }: { v: View; pkg: 'standard' | 'premier'; setPkg: (p: any) => void; onBack: () => void; onDone: (o: any) => void }) {
+function Signup({ v, pkg, setPkg, onBack, onDone }: { v: View; pkg: 'standard' | 'premier' | 'quick_video'; setPkg: (p: any) => void; onBack: () => void; onDone: (o: any) => void }) {
   const [f, setF] = useState({ contactName: '', email: '', phone: '' });
   const [terms, setTerms] = useState<string>(''); const [termsSha, setTermsSha] = useState('');
   const [name, setName] = useState(''); const [agree, setAgree] = useState(false);
@@ -156,7 +156,7 @@ function Welcome({ order }: { order: any }) {
   return <section className="demo-section"><div className="card welcome" style={{ maxWidth: 680, margin: '0 auto', textAlign: 'center' }}>
     <div className="welcome-mark" aria-hidden>✓</div>
     <h2 style={{ fontSize: 30 }}>Welcome to BrittVideo!</h2>
-    <p style={{ fontSize: 19 }}>Thank you, {order.businessName}. Your {order.package === 'premier' ? 'Premier' : 'Standard'} video project is set up and ready to start.</p>
+    <p style={{ fontSize: 19 }}>Thank you, {order.businessName}. Your {order.package === 'premier' ? 'Premier' : order.package === 'quick_video' ? 'One-Off Video' : 'Standard'} video project is set up and ready to start.</p>
     <p className="muted">Next: Jim reviews your website and sends your video story and scripts for your approval. Nothing is finalized until you approve it.</p>
     <p className="muted small">Order {order.orderNumber}</p>
   </div></section>;

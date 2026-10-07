@@ -16,7 +16,7 @@ export function NewSale() {
   const { can } = useSession();
   const pricing = useLoad(() => get('/api/pricing'));
   const [f, setF] = useState<BizForm>(emptyBiz);
-  const [pkg, setPkg] = useState<'standard' | 'premier'>('standard');
+  const [pkg, setPkg] = useState<'standard' | 'premier' | 'quick_video'>('standard');
   const [override, setOverride] = useState<Record<string, string>>({});
   const [reason, setReason] = useState('');
   const [agreeName, setAgreeName] = useState('');

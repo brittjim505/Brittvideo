@@ -23,7 +23,7 @@ contacts real clients.
 10. On the iPad, sign in at the same address. Open **Prospects**.
 11. Next to your test business, press **IPAD DEMO**.
 12. The screen changes to "*Test Senior Living + BrittVideo*". Check: **no** private notes, **no** client list, **no** menu.
-13. Scroll down. You should see **Standard — $597 one-time** and **Premier — $997 + $149/month**.
+13. Scroll down. You should see **Standard — $597 one-time**, **Premier — $997 + $149/month** and **One-Off Video — $197 one-time**.
 14. Press **BECOME A CLIENT — PREMIER**.
 15. Business name and website are already filled in. Type a name and email, read the agreement, type the name again
     under "Type your full name to sign", tick the box, press **CONTINUE TO PAYMENT**.
@@ -35,8 +35,8 @@ contacts real clients.
 ### Part C — Mac: the new client is ready
 20. On the Mac, open **Command Center** (refresh the page).
 21. Under **Needs attention today** you should see your test business: *New Client — Ready to Start · Premier*.
-22. Press **OPEN PROJECT**. You should see four videos: Website (60 sec), Social A and Social B (each Landscape 16:9 ·
-    Vertical 9:16 · Square 1:1) and Email Video — and **nothing** marked approved yet.
+22. Press **OPEN PROJECT**. You should see five videos: Website Video, Social Portrait (9:16), Social Landscape (16:9),
+    Thank-You Video and Email Video — and **nothing** marked approved yet.
 23. Press **OPEN CLIENT**. Under **Orders** you should see $997 and $149/mo, and under **Premier**: Active.
 
 ### Part D — Unsubscribe protection
@@ -57,7 +57,7 @@ contacts real clients.
 31. Press **ANALYZE WEBSITE** and wait. You should see a green box and a list of facts, each with "From" and a web page.
 32. Untick one fact that is wrong or not useful. Type a fact of your own and press **ADD FACT**.
 33. Press **NEXT: REVIEW IMAGES →**. Press **DO NOT USE** on one picture you would not want in a video.
-34. Press **NEXT: CHOOSE STORY →**, pick a story, then **NEXT: BUILD VIDEOS →** and **BUILD 4 VIDEOS**.
+34. Press **NEXT: CHOOSE STORY →**, pick a story and the **Website Video shape** the client wants, then **NEXT: BUILD VIDEOS →** and **BUILD 5 VIDEOS**.
 35. Read a few scenes. Check the Do Not Use picture and your unticked fact appear nowhere.
 36. Press **REWRITE SCENE** on one scene, change the words, press **SAVE SCENE**. Under it: "Source: your own words".
 37. In each tab press **APPROVE ALL … SCENES**, then **NEXT: APPROVE →** and **APPROVE COMPLETE VIDEO KIT**.

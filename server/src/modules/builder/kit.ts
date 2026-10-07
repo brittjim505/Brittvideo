@@ -6,7 +6,7 @@ import type { Actor } from '../../auth/permissions.js';
 import { requirePerm } from '../../auth/service.js';
 import { OwnerError, notFound } from '../../lib/errors.js';
 import { audit } from '../audit/service.js';
-import { createCheckpoint, createProject, kitStatus, sceneHash, scriptHash, DURATIONS } from '../projects/service.js';
+import { createCheckpoint, createProject, kitStatus, sceneHash, scriptHash, DURATIONS, KIT_DELIVERABLES, WEBSITE_FORMATS, WEBSITE_LENGTHS } from '../projects/service.js';
 import { STORIES, TONES, PLATFORMS, QUICK_PURPOSES, QUICK_DELIVERY, quickNarration, quickScript } from './templates.js';
 import { templateWriter, claudeWriter, type KitDraft, type WriterInput } from './writer.js';
 import { readSecret } from '../integrations/secrets.js';
@@ -24,15 +24,16 @@ async function projectRow(q: pg.Pool | pg.PoolClient, id: string) {
 const marketLabel = (industry: string, type?: string | null) => industry === 'other' ? (type || 'Local business') : INDUSTRY_LABEL[industry as Industry] ?? industry;
 
 export function builderOptions(industry: string) {
-  return { stories: STORIES[industry] ?? STORIES.other, tones: TONES, platforms: PLATFORMS, websiteLengths: [30, 60, 90, 120], quickPurposes: QUICK_PURPOSES, quickDelivery: QUICK_DELIVERY, quickLengths: DURATIONS };
+  return { stories: STORIES[industry] ?? STORIES.other, tones: TONES, platforms: PLATFORMS, websiteLengths: [...WEBSITE_LENGTHS], websiteFormats: [{ value: '16x9', label: 'Landscape 16:9' }, { value: '1x1', label: 'Square 1:1' }, { value: '9x16', label: 'Portrait 9:16' }], quickPurposes: QUICK_PURPOSES, quickDelivery: QUICK_DELIVERY, quickLengths: DURATIONS };
 }
 
 /**
- * STEP 5 — Build the four-video kit (Website, Social A, Social B, Email) from the owner-approved facts and images.
+ * STEP 5 — Build the five-video kit (Website, Social Portrait, Social Landscape, Thank-You, Email) from the owner-approved
+ * facts and images. The Website Video's shape is the client's choice (landscape, square or portrait).
  * Rebuilding replaces scenes; if anything was approved, the owner must confirm, and the approvals are recorded as
  * invalidated (no silent loss, no false green).
  */
-export async function buildKit(pool: pg.Pool, actor: Actor, projectId: string, o: { story: string; tone: string; websiteSecs: number; platform: string; confirmReplaceApproved?: boolean },
+export async function buildKit(pool: pg.Pool, actor: Actor, projectId: string, o: { story: string; tone: string; websiteSecs: number; websiteFormat?: string; platform: string; confirmReplaceApproved?: boolean },
   deps: { fetcher?: any } = {}) {
   requirePerm(actor, 'work');
   const p = await projectRow(pool, projectId);
@@ -40,7 +41,9 @@ export async function buildKit(pool: pg.Pool, actor: Actor, projectId: string, o
   const industry = p.industry ?? 'other';
   if (!(STORIES[industry] ?? STORIES.other).includes(o.story)) throw new OwnerError('Please choose a story from the list.');
   if (!TONES.includes(o.tone)) throw new OwnerError('Please choose a tone from the list.');
-  if (![30, 60, 90, 120].includes(o.websiteSecs)) throw new OwnerError('The Website Video can be 30, 60, 90 or 120 seconds.');
+  if (!(WEBSITE_LENGTHS as readonly number[]).includes(o.websiteSecs)) throw new OwnerError('The Website Video can be 30, 60 or 90 seconds.');
+  const websiteFormat = o.websiteFormat ?? '16x9';
+  if (!(WEBSITE_FORMATS as readonly string[]).includes(websiteFormat)) throw new OwnerError('Choose the Website Video shape: landscape, square or portrait.');
   const platform = PLATFORMS.includes(o.platform) ? o.platform : 'Universal / Not Sure';
   const facts = (await pool.query(`SELECT id, text FROM project_facts WHERE project_id=$1 AND selected ORDER BY position, created_at`, [projectId])).rows;
   if (!facts.length) throw new OwnerError('Keep or add at least one fact about the business first (Step 2). BrittVideo only writes from facts you have approved.', 409, 'no_facts');
@@ -53,7 +56,7 @@ export async function buildKit(pool: pg.Pool, actor: Actor, projectId: string, o
     const parts = [approvedScenes ? `${approvedScenes} scene(s) are approved` : '', ownerWritten ? `${ownerWritten} scene(s) have your own rewritten words` : ''].filter(Boolean).join(' and ');
     throw new OwnerError(`${parts}. Building again replaces all scenes${approvedScenes ? ' and they will need approval again' : ''}. The current version is saved first — you can bring it back from Saved versions on the Project page. Press BUILD AGAIN to confirm.`, 409, 'confirm_rebuild', { approvedScenes, ownerWritten });
   }
-  const input: WriterInput = { businessName: p.business_name, industry, businessType: p.btype, story: o.story, tone: o.tone, websiteUrl: p.website_url, facts, images, websiteSecs: o.websiteSecs };
+  const input: WriterInput = { businessName: p.business_name, industry, businessType: p.btype, story: o.story, tone: o.tone, websiteUrl: p.website_url, facts, images, websiteSecs: o.websiteSecs, websiteFormat };
   let draft: KitDraft;
   const key = await readSecret(pool, 'anthropic.api_key').catch(() => null);
   if (key) {
@@ -68,9 +71,19 @@ export async function buildKit(pool: pg.Pool, actor: Actor, projectId: string, o
     await t.query(`SELECT id FROM projects WHERE id=$1 FOR UPDATE`, [projectId]);
     const hadScenes = (await t.query(`SELECT 1 FROM scenes s JOIN deliverables d ON d.id=s.deliverable_id WHERE d.project_id=$1 LIMIT 1`, [projectId])).rowCount;
     if (hadScenes) await createCheckpoint(t, projectId, 'before_rebuild', 'Automatic safety copy before building the videos again', actor.label);
+    // Bring the project's video list up to the current five-video kit (older projects had four, with Social A/B in three
+    // shapes each). Every scene is rebuilt below, so nothing approved is silently kept against a changed video.
+    let position = 1;
+    for (const k of KIT_DELIVERABLES) {
+      const formats = k.kind === 'website' ? [websiteFormat] : k.formats;
+      const r = await t.query(`UPDATE deliverables SET label=$3, formats=$4, position=$5 WHERE project_id=$1 AND kind=$2`, [projectId, k.kind, k.label, formats, position]);
+      if (!r.rowCount) await t.query(`INSERT INTO deliverables (project_id, kind, label, duration_s, formats, position, script_text, script_hash) VALUES ($1,$2,$3,$4,$5,$6,'',$7)`,
+        [projectId, k.kind, k.label, k.duration, formats, position, scriptHash('')]);
+      position++;
+    }
     const dels = (await t.query(`SELECT * FROM deliverables WHERE project_id=$1`, [projectId])).rows;
     const byKind = (k: string) => dels.find((d) => d.kind === k);
-    for (const kind of ['website', 'social_a', 'social_b', 'email'] as const) {
+    for (const kind of ['website', 'social_a', 'social_b', 'thank_you', 'email'] as const) {
       const d = byKind(kind); if (!d) continue;
       const old = (await t.query(`SELECT id, content_hash FROM scenes WHERE deliverable_id=$1`, [d.id])).rows;
       for (const s of old) {
@@ -94,11 +107,11 @@ export async function buildKit(pool: pg.Pool, actor: Actor, projectId: string, o
     }
     await t.query(`UPDATE projects SET story=$2, tone=$3, settings=settings || $4::jsonb, workflow_step=GREATEST(workflow_step,6),
       status=CASE WHEN status IN ('ready_to_start','approved','delivered') THEN 'in_progress' ELSE status END WHERE id=$1`,
-      [projectId, o.story, o.tone, JSON.stringify({ websiteLength: o.websiteSecs, platform, writtenBy: draft.writtenBy })]);
+      [projectId, o.story, o.tone, JSON.stringify({ websiteLength: o.websiteSecs, websiteFormat, platform, writtenBy: draft.writtenBy })]);
     const rec = (await t.query(`SELECT status FROM production_records WHERE project_id=$1`, [projectId])).rows[0];
     if (rec && ['approved', 'package_downloaded', 'delivered'].includes(rec.status)) await t.query(`UPDATE production_records SET status='needs_reapproval', updated_at=now() WHERE project_id=$1`, [projectId]);
-    await createCheckpoint(t, projectId, 'scripts_built', `Four videos built (${o.story}, ${o.websiteSecs}-second website)`, actor.label);
-    await audit(t, actor, 'project.kit_built', { type: 'project', id: projectId }, `Built Website ${o.websiteSecs}s, Social A, Social B and Email (${draft.writtenBy})`);
+    await createCheckpoint(t, projectId, 'scripts_built', `Five videos built (${o.story}, ${o.websiteSecs}-second website)`, actor.label);
+    await audit(t, actor, 'project.kit_built', { type: 'project', id: projectId }, `Built Website ${o.websiteSecs}s (${websiteFormat.replace('x', ':')}), Social Portrait, Social Landscape, Thank-You and Email (${draft.writtenBy})`);
     return { writtenBy: draft.writtenBy, note: draft.note ?? null, status: await kitStatus(t, projectId) };
   }, pool);
 }
@@ -138,7 +151,7 @@ function zip(files: { name: string; data: Buffer }[]): Buffer {
   return Buffer.concat([...parts, cen, end]);
 }
 export const cleanName = (s: string) => s.normalize('NFKD').replace(/[^\w\s-]/g, '').trim().replace(/\s+/g, '_').slice(0, 60) || 'Client';
-const FORMAT_FILE: Record<string, string> = { '16x9': '16x9_Landscape', '9x16': '9x16_Vertical', '1x1': '1x1_Square' };
+const FORMAT_FILE: Record<string, string> = { '16x9': '16x9_Landscape', '9x16': '9x16_Portrait', '1x1': '1x1_Square' };
 
 export async function buildKitZip(pool: pg.Pool, actor: Actor, projectId: string) {
   requirePerm(actor, 'work');
@@ -161,8 +174,8 @@ export async function buildKitZip(pool: pg.Pool, actor: Actor, projectId: string
     return `SCENE ${s.position} — ${s.name}\nTIME: ${s.start_s}–${s.end_s} sec\nIMAGE: ${s.image_ref?.title ?? 'none'}\nSCENE VISUALIZATION: ${s.visual}\nNARRATION: ${s.narration ? '“' + s.narration + '”' : '(no narration)'}\n${src.length ? 'SOURCE: ' + [...new Set(src)].join(' ; ') + '\n' : s.narration && s.written_by === 'owner' ? 'SOURCE: written by the owner\n' : ''}`;
   }).join('\n');
   for (const d of dels) {
-    const label = d.kind === 'website' ? 'Website' : d.kind === 'social_a' ? 'Social_A' : d.kind === 'social_b' ? 'Social_B' : d.kind === 'email' ? 'Email' : 'Video';
-    if (d.formats.length === 1) files.push({ name: `${client}_${label}_${d.duration_s}sec.txt`, data: Buffer.from(sceneText(d, FORMAT_FILE[d.formats[0]].replace('_', ' '))) });
+    const label = cleanName(d.label);
+    if (d.formats.length === 1) files.push({ name: `${client}_${label}_${d.duration_s}sec_${FORMAT_FILE[d.formats[0]]}.txt`, data: Buffer.from(sceneText(d, FORMAT_FILE[d.formats[0]].replace('_', ' '))) });
     else for (const f of d.formats) files.push({ name: `${client}_${label}_${d.duration_s}sec_${FORMAT_FILE[f]}.txt`, data: Buffer.from(sceneText(d, FORMAT_FILE[f].replace('_', ' ') + (f === '9x16' ? '' : ' — reframe the approved scenes without changing narration'))) });
   }
   const assets = usedAssets.size ? (await t.query(`SELECT id, title, status, storage_key, mime, source_url, rights_note FROM assets WHERE id = ANY($1::uuid[])`, [[...usedAssets.keys()]])).rows : [];
@@ -243,6 +256,23 @@ export async function createQuickVideo(pool: pg.Pool, actor: Actor, i: QuickInpu
   const isEmail = i.purpose === 'Email Video';
   const format = isEmail || i.delivery !== 'Website / Social' ? ['16x9'] : ['16x9', '9x16', '1x1'];
   return tx(async (t) => {
+    const title = `${owner.business_name} — ${isEmail ? 'Email Video' : 'Quick Video: ' + i.purpose} (${i.lengthSecs} sec)`;
+    const settings = { purpose: i.purpose, delivery: i.delivery, length: i.lengthSecs, tone, customer: i.customer ?? '', service: i.service ?? '', provider: i.provider ?? '', message: i.message ?? '', promotionDetails: i.promotionDetails ?? '', narration };
+    // A paid One-Off Video waiting to be built is filled in, so the sale and the video stay one project.
+    // Only a sale that still stands (not cancelled, refunded or failed). The row is locked, then re-checked, so two
+    // builds at the same moment can never both fill the same paid project.
+    const waiting = i.clientId ? (await t.query(`SELECT p.id FROM projects p JOIN orders o ON o.id=p.order_id
+        WHERE p.client_id=$1 AND p.kind='quick_video' AND p.archived_at IS NULL AND o.status IN ('pending_payment','paid')
+        AND NOT EXISTS (SELECT 1 FROM deliverables d WHERE d.project_id=p.id) ORDER BY p.created_at LIMIT 1 FOR UPDATE OF p`, [i.clientId])).rows[0] : null;
+    const stillEmpty = waiting ? !(await t.query(`SELECT 1 FROM deliverables WHERE project_id=$1`, [waiting.id])).rowCount : false;
+    if (waiting && stillEmpty) {
+      await t.query(`UPDATE projects SET title=$2, settings=settings || $3::jsonb, status='in_progress' WHERE id=$1`, [waiting.id, title, JSON.stringify(settings)]);
+      await t.query(`INSERT INTO deliverables (project_id, kind, label, duration_s, formats, position, script_text, script_hash) VALUES ($1,$2,$3,$4,$5,1,$6,$7)`,
+        [waiting.id, isEmail ? 'email' : 'quick', isEmail ? 'Email Video' : i.purpose, i.lengthSecs, format, script, scriptHash(script)]);
+      await createCheckpoint(t, waiting.id, 'scripts_built', `One-Off Video script built (${i.purpose})`, actor.label);
+      await audit(t, actor, 'project.quick_built', { type: 'project', id: waiting.id }, `One-Off Video built: ${i.purpose}`);
+      return { projectId: waiting.id };
+    }
     const p = await createProject(t, actor, {
       clientId: i.clientId ?? null, prospectId: i.clientId ? null : i.prospectId ?? null, kind: isEmail ? 'email_video' : 'quick_video',
       title: `${owner.business_name} — ${isEmail ? 'Email Video' : 'Quick Video: ' + i.purpose} (${i.lengthSecs} sec)`, industry: owner.industry, businessType: owner.business_type,

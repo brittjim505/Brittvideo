@@ -77,4 +77,4 @@ export function Status({ s }: { s: string | null | undefined }) {
   const [label, tone] = STATUS_LABEL[s] ?? [s.replace(/_/g, ' '), ''];
   return <span className={'badge ' + tone}>{label}</span>;
 }
-export const packageLabel = (p?: string | null) => p === 'premier' ? 'Premier' : p === 'standard' ? 'Standard' : p === 'quick_video' ? 'Quick Video' : p ?? '';
+export const packageLabel = (p?: string | null) => p === 'premier' ? 'Premier' : p === 'standard' ? 'Standard' : p === 'quick_video' ? 'One-Off Video' : p ?? '';

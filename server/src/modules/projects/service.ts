@@ -7,14 +7,21 @@ import { OwnerError, notFound } from '../../lib/errors.js';
 import { contentHash, sha256 } from '../../lib/util.js';
 import { audit } from '../audit/service.js';
 
-export type DeliverableKind = 'website' | 'social_a' | 'social_b' | 'email' | 'quick';
+export type DeliverableKind = 'website' | 'social_a' | 'social_b' | 'thank_you' | 'email' | 'quick';
 export const DURATIONS = [15, 30, 60, 90, 120] as const;
 
-/** The Standard deliverable set (K14/N3): Website ≤120 s, Social A/B as 16:9 + 9:16 + 1:1 of one creative, separate Email. */
+/**
+ * The Standard (and Premier) deliverable set, as confirmed by the owner on 2026-10-07 — five videos:
+ * Website (up to 90 s; the client chooses landscape, square or portrait), Social Portrait 9:16, Social Landscape 16:9,
+ * a Thank-You Video and a separate Email Video. (Internal kinds social_a / social_b are kept for older projects.)
+ */
+export const WEBSITE_FORMATS = ['16x9', '1x1', '9x16'] as const;
+export const WEBSITE_LENGTHS = [30, 60, 90] as const;
 export const KIT_DELIVERABLES: { kind: DeliverableKind; label: string; duration: number; formats: string[] }[] = [
   { kind: 'website', label: 'Website Video', duration: 60, formats: ['16x9'] },
-  { kind: 'social_a', label: 'Social A', duration: 30, formats: ['16x9', '9x16', '1x1'] },
-  { kind: 'social_b', label: 'Social B', duration: 30, formats: ['16x9', '9x16', '1x1'] },
+  { kind: 'social_a', label: 'Social Portrait', duration: 30, formats: ['9x16'] },
+  { kind: 'social_b', label: 'Social Landscape', duration: 30, formats: ['16x9'] },
+  { kind: 'thank_you', label: 'Thank-You Video', duration: 30, formats: ['16x9'] },
   { kind: 'email', label: 'Email Video', duration: 15, formats: ['16x9'] },
 ];
 
@@ -237,6 +244,9 @@ export async function restoreCheckpoint(pool: pg.Pool, actor: Actor, projectId: 
     for (const d of snap.deliverables) {
       const cur = (await t.query(`SELECT * FROM deliverables WHERE id=$1 AND project_id=$2`, [d.id, projectId])).rows[0];
       if (!cur) continue;
+      // The video's name and shape come back with its script and scenes (e.g. the Website Video shape chosen then).
+      if (Array.isArray(d.formats) && d.formats.length && (d.label !== cur.label || JSON.stringify(d.formats) !== JSON.stringify(cur.formats)))
+        await t.query(`UPDATE deliverables SET label=$2, formats=$3 WHERE id=$1`, [d.id, d.label ?? cur.label, d.formats]);
       const h = scriptHash(d.script_text);
       if (h !== cur.script_hash) {
         await t.query(`UPDATE deliverables SET script_text=$2, script_hash=$3, duration_s=$4 WHERE id=$1`, [d.id, d.script_text, h, d.duration_s]);

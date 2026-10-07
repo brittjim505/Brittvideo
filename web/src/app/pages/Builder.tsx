@@ -10,7 +10,7 @@ const HELP = [
   'BrittVideo reads the client’s website and lists facts with where each came from. Keep only what is true and useful.',
   'Choose the pictures BrittVideo may use. Mark anything unsuitable as Do Not Use.',
   'Choose the story, tone and length of the Website Video.',
-  'Build the four videos: Website, Social A, Social B and Email.',
+  'Build the five videos: Website, Social Portrait, Social Landscape, Thank-You and Email.',
   'Read each scene. Rewrite words or change pictures, then approve each scene.',
   'When every scene is approved, approve the Complete Video Kit.',
   'Download the approved kit, send it to the client, then record the delivery.',
@@ -141,16 +141,18 @@ function StepImages({ b, reload, next }: { b: any; reload: () => void; next: () 
 
 function StepStory({ b, reload, next }: { b: any; reload: () => void; next: () => void }) {
   const o = b.options; const s = b.project.settings ?? {};
-  const [f, setF] = useState({ story: b.project.story ?? o.stories[0], tone: b.project.tone ?? o.tones[0], websiteSecs: s.websiteLength ?? 60, platform: s.platform ?? 'HeyGen' });
+  const [f, setF] = useState({ story: b.project.story ?? o.stories[0], tone: b.project.tone ?? o.tones[0], websiteSecs: o.websiteLengths.includes(s.websiteLength) ? s.websiteLength : 60,
+    websiteFormat: s.websiteFormat ?? '16x9', platform: s.platform ?? 'HeyGen' });
   useEffect(() => { sessionStorage.setItem('bv-build-' + b.project.id, JSON.stringify(f)); }, [f, b.project.id]);
   return <section className="card">
     <div className="grid">
       <Field label="Video story"><select value={f.story} onChange={(e) => setF({ ...f, story: e.target.value })}>{o.stories.map((x: string) => <option key={x}>{x}</option>)}</select></Field>
       <Field label="Tone"><select value={f.tone} onChange={(e) => setF({ ...f, tone: e.target.value })}>{o.tones.map((x: string) => <option key={x}>{x}</option>)}</select></Field>
       <Field label="Website Video length"><select value={f.websiteSecs} onChange={(e) => setF({ ...f, websiteSecs: Number(e.target.value) })}>{o.websiteLengths.map((x: number) => <option key={x} value={x}>{x} seconds</option>)}</select></Field>
+      <Field label="Website Video shape" help="The client's choice."><select value={f.websiteFormat} onChange={(e) => setF({ ...f, websiteFormat: e.target.value })}>{o.websiteFormats.map((x: any) => <option key={x.value} value={x.value}>{x.label}</option>)}</select></Field>
       <Field label="Creation platform"><select value={f.platform} onChange={(e) => setF({ ...f, platform: e.target.value })}>{o.platforms.map((x: string) => <option key={x}>{x}</option>)}</select></Field>
     </div>
-    <p className="help">Social A and Social B are 30 seconds each (Landscape 16:9, Vertical 9:16 and Square 1:1). The Email Video is 15 seconds.</p>
+    <p className="help">The two social videos (one portrait 9:16, one landscape 16:9) and the Thank-You Video are 30 seconds each. The Email Video is 15 seconds.</p>
     <div className="actions"><button className="btn next" onClick={next}>NEXT: BUILD VIDEOS →</button></div>
     {void reload}
   </section>;
@@ -160,7 +162,9 @@ function StepBuild({ b, reload, next }: { b: any; reload: () => void; next: () =
   const a = useAction(); const [confirm, setConfirm] = useState<string | null>(null); const [note, setNote] = useState<string | null>(null);
   const saved = (() => { try { return JSON.parse(sessionStorage.getItem('bv-build-' + b.project.id) ?? 'null'); } catch { return null; } })();
   const s = b.project.settings ?? {};
-  const choice = saved ?? { story: b.project.story ?? b.options.stories[0], tone: b.project.tone ?? b.options.tones[0], websiteSecs: s.websiteLength ?? 60, platform: s.platform ?? 'HeyGen' };
+  const choice = saved ?? { story: b.project.story ?? b.options.stories[0], tone: b.project.tone ?? b.options.tones[0], websiteSecs: b.options.websiteLengths.includes(s.websiteLength) ? s.websiteLength : 60,
+    websiteFormat: s.websiteFormat ?? '16x9', platform: s.platform ?? 'HeyGen' };
+  const SHAPE = { '16x9': 'Landscape 16:9', '1x1': 'Square 1:1', '9x16': 'Portrait 9:16' } as Record<string, string>;
   const build = async (confirmReplaceApproved = false) => {
     setConfirm(null);
     try {
@@ -169,10 +173,10 @@ function StepBuild({ b, reload, next }: { b: any; reload: () => void; next: () =
     } catch (e: any) { if (e.code === 'confirm_rebuild') setConfirm(e.message); else a.setError(e.message); }
   };
   return <section className="card">
-    <dl className="kv"><dt>Story</dt><dd>{choice.story}</dd><dt>Tone</dt><dd>{choice.tone}</dd><dt>Website Video</dt><dd>{choice.websiteSecs} seconds</dd><dt>Platform</dt><dd>{choice.platform}</dd>
+    <dl className="kv"><dt>Story</dt><dd>{choice.story}</dd><dt>Tone</dt><dd>{choice.tone}</dd><dt>Website Video</dt><dd>{choice.websiteSecs} seconds · {SHAPE[choice.websiteFormat ?? '16x9']}</dd><dt>Platform</dt><dd>{choice.platform}</dd>
       <dt>Facts kept</dt><dd>{b.facts.filter((f: any) => f.selected).length}</dd><dt>Pictures in use</dt><dd>{b.images.filter((i: any) => i.selected).length}</dd></dl>
     <div className="actions">
-      <button className="btn next" disabled={a.busy} onClick={() => a.run(() => build(false))}>{b.scenes.length ? 'BUILD 4 VIDEOS AGAIN' : 'BUILD 4 VIDEOS'}</button>
+      <button className="btn next" disabled={a.busy} onClick={() => a.run(() => build(false))}>{b.scenes.length ? 'BUILD 5 VIDEOS AGAIN' : 'BUILD 5 VIDEOS'}</button>
       <Link className="btn" to="?step=4">CHANGE STORY SETTINGS</Link>
     </div>
     {confirm && <div className="notice warn" style={{ marginTop: 12 }}>{confirm}<div className="actions"><button className="btn next" onClick={() => a.run(() => build(true))}>BUILD AGAIN</button><button className="btn" onClick={() => setConfirm(null)}>KEEP MY APPROVED SCENES</button></div></div>}
@@ -251,7 +255,7 @@ function StepApprove({ b, reload, next }: { b: any; reload: () => void; next: ()
     <ul className="list">{st.deliverables.map((d: any) => <li key={d.id}><span><b>{d.label}</b> <span className="muted small">{d.durationS} sec</span></span>
       <span className={'badge ' + (d.complete ? 'ok' : 'warn')}>{d.complete ? '✓ ' : ''}{d.approvedCount}/{d.sceneCount} scenes approved</span></li>)}</ul>
     {st.completeVideoKitApproved ? <div className="notice ok"><b>✓ COMPLETE VIDEO KIT APPROVED</b><div className="actions"><button className="btn next" onClick={next}>NEXT: DOWNLOAD →</button></div></div> : <>
-      {!st.allComponentsApproved && <p className="help">Finish approving every scene in all four videos (Step 6) first.</p>}
+      {!st.allComponentsApproved && <p className="help">Finish approving every scene in all five videos (Step 6) first.</p>}
       {st.finalApprovalLostBecause && <div className="notice warn">{st.finalApprovalLostBecause}</div>}
       <div className="actions"><button className={'btn ' + (st.readyForFinalApproval ? 'next' : '')} disabled={!st.readyForFinalApproval || a.busy}
         onClick={() => a.run(async () => { await post(`/api/projects/${b.project.id}/approve`, { type: 'kit', expectedHash: st.compositeHash }); reload(); })}>APPROVE COMPLETE VIDEO KIT</button></div></>}
@@ -264,7 +268,7 @@ function StepDownload({ b, reload }: { b: any; reload: () => void }) {
   const ok = b.status.completeVideoKitApproved; const downloaded = ['package_downloaded', 'delivered'].includes(b.production?.status);
   return <section className="card">
     {!ok ? <div className="notice warn">Approve the Complete Video Kit (Step 7) to unlock downloads.</div> : <>
-      <p>The kit contains every script as a file for each format (Website, Social A and B in Landscape 16:9, Vertical 9:16 and Square 1:1, and Email), the pictures used, and where every fact came from.</p>
+      <p>The kit contains a script file for each video (Website in the client's chosen shape, Social Portrait 9:16, Social Landscape 16:9, Thank-You and Email), the pictures used, and where every fact came from.</p>
       <div className="actions"><a className={'btn ' + (!downloaded ? 'next' : '')} href={`/api/projects/${b.project.id}/download/kit`} onClick={() => [1500, 4000, 9000].forEach((ms) => setTimeout(reload, ms))}>DOWNLOAD COMPLETE VIDEO KIT</a></div>
       <h2 style={{ marginTop: 20 }}>Record delivery</h2>
       <p className="help">After you send or hand over the finished files, record it here. BrittVideo won’t record a delivery before the approved kit is downloaded.</p>

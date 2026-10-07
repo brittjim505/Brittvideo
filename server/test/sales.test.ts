@@ -54,7 +54,7 @@ describe('in-person iPad demo → sale → client + order + project (W20, W23, D
     expect(v.status).toBe(200);
     const text = JSON.stringify(v.json);
     expect(v.json.business.name).toBe('Sunrise Senior Living');
-    expect(v.json.packages.map((p: any) => p.priceText)).toEqual(['$597 one-time', '$997 + $149/month']);
+    expect(v.json.packages.map((p: any) => p.priceText)).toEqual(['$597 one-time', '$997 + $149/month', '$197 one-time']);
     for (const leak of ['SECRET', '$400', 'Other Private Client', 'private_notes', 'jim@example.com', 'price_book', 'override', 'Pat']) expect(text).not.toContain(leak);
     expect(v.json.library.length).toBeGreaterThan(0);
     expect(v.json.library.every((i: any) => !('permission_evidence' in i))).toBe(true);
@@ -137,7 +137,7 @@ describe('in-person iPad demo → sale → client + order + project (W20, W23, D
     const proj = (await c.get('/api/projects')).json.find((p: any) => p.business_name === 'Sunrise Senior Living');
     const detail = await c.get(`/api/projects/${proj.id}`);
     expect(detail.json.deliverables.map((d: any) => [d.kind, d.duration_s, d.formats])).toEqual([
-      ['website', 60, ['16x9']], ['social_a', 30, ['16x9', '9x16', '1x1']], ['social_b', 30, ['16x9', '9x16', '1x1']], ['email', 15, ['16x9']]]);
+      ['website', 60, ['16x9']], ['social_a', 30, ['9x16']], ['social_b', 30, ['16x9']], ['thank_you', 30, ['16x9']], ['email', 15, ['16x9']]]);
     expect(detail.json.status.completeVideoKitApproved).toBe(false);   // no false green on a brand-new project
   });
 });

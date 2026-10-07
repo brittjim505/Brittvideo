@@ -8,7 +8,7 @@ import { once } from '../../lib/idempotency.js';
 import { money, sha256 } from '../../lib/util.js';
 import { audit } from '../audit/service.js';
 import { cleanBusiness, createOrReuseClient, upsertProspect, type BusinessInput } from '../crm/service.js';
-import { currentPriceBook, publicPackages, type PackageCode } from '../pricing/service.js';
+import { currentPriceBook, publicPackages, PACKAGE_ORDER, type PackageCode } from '../pricing/service.js';
 import { createProject, createCheckpoint } from '../projects/service.js';
 import { TERMS_VERSION, termsText } from './terms.js';
 import { paymentAdapters } from '../../integrations/payment.js';
@@ -38,7 +38,7 @@ export interface SaleInput {
  */
 export async function completeSale(pool: pg.Pool, actor: Actor, input: SaleInput) {
   if (actor.kind === 'user') requirePerm(actor, 'work', 'record sales');
-  if (!['standard', 'premier'].includes(input.package)) throw new OwnerError('Please choose Standard or Premier.');
+  if (!PACKAGE_ORDER.includes(input.package)) throw new OwnerError('Please choose Standard, Premier or One-Off Video.');
   if (!input.agreement?.accepted || !input.agreement.name?.trim()) throw new OwnerError('Please read the agreement, type your full name and check "I agree" to continue.');
   if (input.overrides && Object.keys(input.overrides).length) {
     if (actor.kind !== 'user') throw new OwnerError('Prices can only be adjusted by BrittVideo.', 403, 'forbidden');
@@ -109,8 +109,11 @@ export async function completeSale(pool: pg.Pool, actor: Actor, input: SaleInput
       await t.query(`INSERT INTO premier_memberships (client_id, order_id, status, monthly_price_cents) VALUES ($1,$2,'pending_start',$3)`, [client.id, order.id, monthly]);
     }
     // 5. Project — "New Client — Ready to Start" on the Mac (I1, W23). One per order (unique index).
+    // A One-Off Video sale opens an empty Quick Video project; building it in Quick Video fills this project (no duplicate).
+    const oneOff = input.package === 'quick_video';
     const project = await createProject(t, actor, {
-      clientId: client.id, orderId: order.id, kind: 'video_kit', title: `${client.business_name} — ${pkgDef.label} Video Kit`,
+      clientId: client.id, orderId: order.id, kind: oneOff ? 'quick_video' : 'video_kit',
+      title: oneOff ? `${client.business_name} — One-Off Video` : `${client.business_name} — ${pkgDef.label} Video Kit`,
       industry: client.industry, businessType: client.business_type, source: 'sale', settings: { package: input.package },
     });
     await createCheckpoint(t, project.id, 'created', 'Project created from sale', actor.label);
@@ -126,7 +129,7 @@ export async function completeSale(pool: pg.Pool, actor: Actor, input: SaleInput
 
 async function saleResult(t: pg.PoolClient | pg.Pool, orderId: string) {
   const o = (await t.query(`SELECT o.*, c.business_name FROM orders o JOIN clients c ON c.id=o.client_id WHERE o.id=$1`, [orderId])).rows[0];
-  const p = (await t.query(`SELECT id, project_number, title, status FROM projects WHERE order_id=$1 AND kind='video_kit'`, [orderId])).rows[0];
+  const p = (await t.query(`SELECT id, project_number, title, status FROM projects WHERE order_id=$1 AND kind IN ('video_kit','quick_video') ORDER BY created_at LIMIT 1`, [orderId])).rows[0];
   const lines = (await t.query(`SELECT item_code, label, billing, sold_price_cents FROM order_lines WHERE order_id=$1 ORDER BY created_at`, [orderId])).rows;
   return {
     orderId: o.id, orderNumber: o.order_number, clientId: o.client_id, businessName: o.business_name, package: o.package,

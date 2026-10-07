@@ -22,7 +22,7 @@ export function SystemHealth() {
       <b style={{ fontSize: 19 }}>{s.headline}</b><div>{s.workSavedAndProtected ? '✓ Work Saved & Protected' : 'Your work is saved; protection needs attention (see below).'}</div></div>
     <section className="card"><ul className="list">{h.data.checks.map((c: any) => <li key={c.component}><div><b>{c.label}</b><div className="small muted">{c.ownerMessage}</div></div><span className={'badge ' + TONE[c.status]}>{WORD[c.status]}</span></li>)}</ul></section>
     {can('backup') && <section className="card">
-      <div className="row between"><h2 style={{ margin: 0 }}>Backups</h2><button className="btn next" disabled={a.busy} onClick={async () => { if (await a.run(() => post('/api/backups'), 'Backup created and checked.')) { backups.reload(); h.reload(); } }}>{a.busy ? 'Making backup…' : 'MAKE A BACKUP NOW'}</button></div>
+      <div className="row between"><h2 style={{ margin: 0 }}>Backups</h2><button className="btn next" disabled={a.busy} onClick={async () => { if (await a.run(() => post('/api/backups'), 'Backup created and checked.')) { backups.reload(); h.reload(); window.dispatchEvent(new CustomEvent('bv:health-changed')); } }}>{a.busy ? 'Making backup…' : 'MAKE A BACKUP NOW'}</button></div>
       <p className="help">A backup is made automatically every night, checked immediately, and kept 35 days. Sync is not backup — these are separate, encrypted copies.</p>
       <Msg error={a.error} ok={a.ok} />
       {backups.data?.length ? <div className="scroll-x"><table className="t"><thead><tr><th>When</th><th>Kind</th><th>Result</th><th>Size</th></tr></thead><tbody>

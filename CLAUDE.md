@@ -1,8 +1,11 @@
 # BrittVideo — notes for Claude
 
 Owner: Jim Britt (not a programmer). Keep messages to him short, big headings, one thing at a time; he prefers large text.
-Never change approved business rules without asking him. Locked decisions: Standard **$597** one-time; **Premier** (never
-"Premium") **$997 + $149/month**. `docs/spec/LATEST_REQUIREMENTS_DELTA.md` overrides older spec text.
+Never change approved business rules without asking him. Locked decisions (updated 2026-10-07): three products —
+**Standard $597** one-time = five videos (Website up to 90 s in the shape the client chooses: 16:9 / 1:1 / 9:16; Social Portrait
+9:16; Social Landscape 16:9; Thank-You Video; Email Video) · **Premier** (never "Premium") **$997 + $149/month** = the same
+five + hosting, monthly report, a fresh video each quarter (up to 120 s) · **One-Off Video $197** (one Quick Video).
+More single-video products will be added later (e.g. a follow-up/thank-you product at $197). `docs/spec/LATEST_REQUIREMENTS_DELTA.md` overrides older spec text.
 
 ## Layout
 - `server/` Node 22 + TypeScript + Fastify 5 + PostgreSQL 16. Migrations in `server/src/migrations/` are forward-only and

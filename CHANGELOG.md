@@ -2,6 +2,21 @@
 
 Requirement-affecting changes only. Newest first.
 
+## 3.1.0 — 2026-10-07
+
+### Changed — products (owner decision, 2026-10-07)
+- **Standard ($597)** is now five videos: Website Video up to 90 seconds in the shape the client chooses (landscape 16:9,
+  square 1:1 or portrait 9:16 — chosen in Builder Step 4), **Social Portrait** 9:16, **Social Landscape** 16:9, a new
+  **Thank-You Video** (claim-free fixed wording) and the Email Video. Builder: **BUILD 5 VIDEOS**.
+- **Premier ($997 + $149/month)**: the same five videos plus hosting, monthly report and a fresh video each quarter.
+- New product **One-Off Video ($197)**: sold in Record a Sale and in demos/Demo Links; creates a waiting One-Off project;
+  **BUILD THIS VIDEO** opens Quick Video and the script is written into that same project.
+- Agreement text updated (terms version 2026-10-07.draft-2); demo "What you get" updated.
+- Existing price books are upgraded once at start-up (owner-changed prices are kept; past sales keep theirs).
+- Older four-video projects are brought up to the five-video kit the next time they are built.
+- Kit download file names now always name the video and its shape (e.g. `…_Social_Portrait_30sec_9x16_Portrait.txt`).
+- Migration 0005 (deliverable kind `thank_you`).
+
 ## 3.0.1 — 2026-10-07
 
 ### Added — Get pictures from a website + business folders
